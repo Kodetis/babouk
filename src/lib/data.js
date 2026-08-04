@@ -236,18 +236,49 @@ export const countryFacets = [
  */
 const CELL = 0.5;
 
+/** Slugs de familles d'un acteur, séparés par un espace — convention `data-f`
+ *  de l'annuaire, à laquelle le sélecteur `~=` et le `split(" ")` client se
+ *  fient des deux côtés. Un acteur sans famille n'est pas une case vide : il
+ *  porte `sans-famille`, valeur que le filtre doit pouvoir atteindre. */
+const slugsOf = (families) =>
+  families.map((key) => FAMILY_BY_KEY.get(key)?.slug).filter(Boolean).join(" ") ||
+  "sans-famille";
+
 const cells = new Map();
 for (const a of onMap) {
   const key = `${Math.round(a.lat / CELL)}:${Math.round(a.lon / CELL)}`;
   let cell = cells.get(key);
   if (!cell) {
-    cell = { lat: 0, lon: 0, count: 0, families: new Map(), country: a.country };
+    cell = {
+      lat: 0, lon: 0, count: 0,
+      families: new Map(),
+      country: a.country,
+      countries: new Set(),
+      actors: [],
+    };
     cells.set(key, cell);
   }
   cell.lat += a.lat;
   cell.lon += a.lon;
   cell.count += 1;
+  cell.countries.add(a.country);
+  // Quatre champs, pas un de plus : le panneau de la carte affiche un nom, une
+  // pastille, une ville et un lien. Y verser description, tags ou logo ferait
+  // passer la charge de 13 Ko gzippés à plusieurs centaines.
+  cell.actors.push({ name: a.name, fams: slugsOf(a.families), city: a.city, web: a.url });
   for (const f of a.families) cell.families.set(f, (cell.families.get(f) ?? 0) + 1);
+
+  // Une cellule d'un demi-degré n'enjambe aujourd'hui aucune frontière, et
+  // `country` prend donc sans risque le pays du premier acteur inséré. Rien ne
+  // le garantit au prochain réexport. On échoue bruyamment plutôt que de
+  // laisser le filtre pays s'appuyer en silence sur une valeur arbitraire.
+  if (cell.countries.size > 1) {
+    throw new Error(
+      `Cellule ${key} à cheval sur plusieurs pays : ${[...cell.countries]
+        .map((c) => c || "(sans pays)")
+        .join(", ")}. Le filtre pays de la carte suppose une cellule mono-pays.`
+    );
+  }
 }
 
 export const mapPoints = [...cells.values()]
@@ -268,11 +299,24 @@ export const mapPoints = [...cells.values()]
       y: Math.round(y * 10) / 10,
       n: cell.count,
       c: dominant ? dominant.color : "rgba(255,255,255,0.45)",
+      // `f` colore le disque, `fams` le filtre. Les deux sont nécessaires et ne
+      // disent pas la même chose : 34 foyers sur 55 contiennent plusieurs
+      // acteurs, donc filtrer sur la dominante éteindrait un foyer abritant un
+      // CERT au motif qu'il est majoritairement composé d'entreprises.
       f: dominant ? dominant.slug : "sans-famille",
+      fams: [...new Set(cell.actors.flatMap((a) => a.fams.split(" ")))].join(" "),
       country: cell.country,
+      actors: cell.actors,
     };
   })
-  .sort((a, b) => a.n - b.n);
+  // Décroissant, et cela règle deux choses d'un coup. En SVG l'ordre du DOM
+  // commande la peinture ET le focus, les éléments tardifs passant au-dessus :
+  // les gros foyers arrivent donc en premier — peints dessous, atteints
+  // d'abord au clavier — et les petits en dernier, au-dessus et cliquables. En
+  // croissant, le disque de 63 acteurs de Nairobi, large de 19 unités quand
+  // deux cellules voisines n'en sont séparées que de 4,8, recouvrait ses
+  // voisins et les rendait inatteignables.
+  .sort((a, b) => b.n - a.n);
 
 /**
  * Arcs du fond de carte.
