@@ -16,25 +16,34 @@
  * est connue : l'échelle multiplie aussi les traits et les rayons. Les traits en
  * sortent par `vector-effect`, les foyers par une contre-échelle de 1/k.
  */
-import { mapPoints } from "./data.js";
+import { mapPointsFins } from "./data.js";
 import { VIEW_WIDTH, VIEW_HEIGHT } from "./projection.js";
 
 /** Étendue minimale d'un cadrage, en unités de viewBox.
  *
  *  Un pays d'un seul foyer a une étendue nulle : sans plancher, l'échelle
- *  serait infinie. 175 unités valent environ 18° de longitude — assez pour
- *  qu'une île reste posée dans son voisinage plutôt que flottant seule au
- *  milieu de la mer, et assez peu pour que Maurice soit autre chose qu'un
- *  point. C'est la hauteur du cadre qui commande : à 175, le facteur plafonne
- *  vers ×4,2. */
-const ETENDUE_MIN = 175;
+ *  serait infinie. 20 unités valent environ 2° de longitude — l'échelle d'une
+ *  île, qui est précisément celle qu'il faut atteindre : les 30 foyers fins de
+ *  La Réunion tiennent dans 5 unités, et rien ne les sépare tant que le cadre
+ *  n'a pas été resserré jusque-là. */
+const ETENDUE_MIN = 20;
 
 /** Marge autour des foyers, en proportion de l'étendue. */
 const MARGE = 1.35;
 
-/** Plafond d'échelle. Au-delà, la mer occupe tout et le repère géographique
- *  disparaît : on ne sait plus où l'on est. */
-const ECHELLE_MAX = 5;
+/**
+ * Plafond d'échelle.
+ *
+ * La première version plafonnait à 5, au motif qu'au-delà « la mer occupe tout
+ * et le repère géographique disparaît ». C'était faux pour les îles : le fond
+ * de carte contient La Réunion — le polygone France en porte deux, Mayotte et
+ * l'île — et à ×37 elle occupe le tiers du cadre. Le repère ne disparaît pas,
+ * il apparaît.
+ *
+ * Ce plafond ne mord que sur les petits pays. L'Inde et l'Australie s'arrêtent
+ * d'elles-mêmes vers ×3, contraintes par leur propre étendue.
+ */
+const ECHELLE_MAX = 37;
 
 /**
  * Cadrage d'un pays : `{ k, tx, ty }` tel que
@@ -71,7 +80,10 @@ function cadrage(points) {
  */
 export const cadrages = (() => {
   const parPays = new Map();
-  for (const p of mapPoints) {
+  // Sur les foyers fins : ce sont eux que le cadrage doit séparer, et leur
+  // étendue est la vraie emprise du pays. Les foyers larges d'une île tiennent
+  // en un point et donneraient un cadrage aveugle.
+  for (const p of mapPointsFins) {
     if (!p.country) continue;
     if (!parPays.has(p.country)) parPays.set(p.country, []);
     parPays.get(p.country).push(p);

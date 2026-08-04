@@ -229,12 +229,26 @@ export const countryFacets = [
 /* ------------------------------------------------------------------ carte */
 
 /**
- * Regroupement des acteurs co-localisés. Une bonne part des fiches partagent le
- * centroïde de leur ville — 93 acteurs indiens portent les mêmes coordonnées à
- * Delhi. Dessiner 570 disques empilés produirait une tache ; on agrège sur une
- * grille d'un demi-degré et le rayon porte l'effectif.
+ * Regroupement des acteurs co-localisés, à deux résolutions.
+ *
+ * Une seule grille ne peut pas servir les deux échelles de lecture.
+ *
+ * À l'échelle du bassin — 148° de longitude — il faut agréger large : une
+ * bonne part des fiches partagent le centroïde de leur ville, 93 acteurs
+ * indiens portent les mêmes coordonnées à Delhi, et 168 disques se
+ * chevaucheraient en pâté. Le demi-degré est le bon compromis là.
+ *
+ * Mais ce même demi-degré détruit l'information à l'échelle d'une île. La
+ * Réunion mesure 0,47° sur 0,49° : l'île entière tient dans une cellule, et ses
+ * 45 acteurs — qui portent 43 coordonnées distinctes, de vraies adresses
+ * réparties sur 19 communes — s'écrasent en 3 disques. La grille fine les rend :
+ * 30 foyers au centième de degré.
+ *
+ * D'où deux jeux, calculés au build. La page montre le premier au bassin, le
+ * second dès qu'un pays est cadré.
  */
 const CELL = 0.5;
+const CELL_FINE = 0.01;
 
 /** Slugs de familles d'un acteur, séparés par un espace — convention `data-f`
  *  de l'annuaire, à laquelle le sélecteur `~=` et le `split(" ")` client se
@@ -244,44 +258,47 @@ const slugsOf = (families) =>
   families.map((key) => FAMILY_BY_KEY.get(key)?.slug).filter(Boolean).join(" ") ||
   "sans-famille";
 
-const cells = new Map();
-for (const a of onMap) {
-  const key = `${Math.round(a.lat / CELL)}:${Math.round(a.lon / CELL)}`;
-  let cell = cells.get(key);
-  if (!cell) {
-    cell = {
-      lat: 0, lon: 0, count: 0,
-      families: new Map(),
-      country: a.country,
-      countries: new Set(),
-      actors: [],
-    };
-    cells.set(key, cell);
-  }
-  cell.lat += a.lat;
-  cell.lon += a.lon;
-  cell.count += 1;
-  cell.countries.add(a.country);
-  // Quatre champs, pas un de plus : le panneau de la carte affiche un nom, une
-  // pastille, une ville et un lien. Y verser description, tags ou logo ferait
-  // passer la charge de 13 Ko gzippés à plusieurs centaines.
-  cell.actors.push({ name: a.name, fams: slugsOf(a.families), city: a.city, web: a.url });
-  for (const f of a.families) cell.families.set(f, (cell.families.get(f) ?? 0) + 1);
+function agreger(taille) {
+  const cells = new Map();
+  for (const a of onMap) {
+    const key = `${Math.round(a.lat / taille)}:${Math.round(a.lon / taille)}`;
+    let cell = cells.get(key);
+    if (!cell) {
+      cell = {
+        lat: 0, lon: 0, count: 0,
+        families: new Map(),
+        country: a.country,
+        countries: new Set(),
+        actors: [],
+      };
+      cells.set(key, cell);
+    }
+    cell.lat += a.lat;
+    cell.lon += a.lon;
+    cell.count += 1;
+    cell.countries.add(a.country);
+    // Quatre champs, pas un de plus : le panneau de la carte affiche un nom, une
+    // pastille, une ville et un lien. Y verser description, tags ou logo ferait
+    // passer la charge de quelques dizaines de Ko gzippés à plusieurs centaines.
+    cell.actors.push({ name: a.name, fams: slugsOf(a.families), city: a.city, web: a.url });
+    for (const f of a.families) cell.families.set(f, (cell.families.get(f) ?? 0) + 1);
 
-  // Une cellule d'un demi-degré n'enjambe aujourd'hui aucune frontière, et
-  // `country` prend donc sans risque le pays du premier acteur inséré. Rien ne
-  // le garantit au prochain réexport. On échoue bruyamment plutôt que de
-  // laisser le filtre pays s'appuyer en silence sur une valeur arbitraire.
-  if (cell.countries.size > 1) {
-    throw new Error(
-      `Cellule ${key} à cheval sur plusieurs pays : ${[...cell.countries]
-        .map((c) => c || "(sans pays)")
-        .join(", ")}. Le filtre pays de la carte suppose une cellule mono-pays.`
-    );
+    // Aucune cellule n'enjambe aujourd'hui de frontière, et `country` prend donc
+    // sans risque le pays du premier acteur inséré. Rien ne le garantit au
+    // prochain réexport. On échoue bruyamment plutôt que de laisser le filtre
+    // pays s'appuyer en silence sur une valeur arbitraire.
+    if (cell.countries.size > 1) {
+      throw new Error(
+        `Cellule ${key} (grille ${taille}°) à cheval sur plusieurs pays : ${[...cell.countries]
+          .map((c) => c || "(sans pays)")
+          .join(", ")}. Le filtre pays de la carte suppose une cellule mono-pays.`
+      );
+    }
   }
+  return cells;
 }
 
-export const mapPoints = [...cells.values()]
+const enPoints = (cells) => [...cells.values()]
   .map((cell) => {
     const lat = cell.lat / cell.count;
     const lon = cell.lon / cell.count;
@@ -317,6 +334,15 @@ export const mapPoints = [...cells.values()]
   // deux cellules voisines n'en sont séparées que de 4,8, recouvrait ses
   // voisins et les rendait inatteignables.
   .sort((a, b) => b.n - a.n);
+
+/** Vue d'ensemble du bassin. C'est celle de la landing, et celle de `/carte`
+ *  tant qu'aucun pays n'est cadré. */
+export const mapPoints = enPoints(agreger(CELL));
+
+/** Vue fine, montrée à la place de la précédente dès qu'un pays est cadré.
+ *  Trois fois plus de foyers pour les mêmes acteurs — c'est la répartition
+ *  réelle, que le demi-degré confondait. */
+export const mapPointsFins = enPoints(agreger(CELL_FINE));
 
 /**
  * Arcs du fond de carte.

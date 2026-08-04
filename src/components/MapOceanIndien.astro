@@ -13,7 +13,7 @@
  */
 import mapData from "../data/map-oi.json";
 import { geometryToPath, VIEW_WIDTH, VIEW_HEIGHT, project } from "../lib/projection.js";
-import { mapPoints, mapArcs, coverage } from "../lib/data.js";
+import { mapPoints, mapPointsFins, mapArcs, coverage } from "../lib/data.js";
 
 interface Props {
   /** `meet` montre la fenêtre entière, `slice` la remplit en rognant. */
@@ -100,6 +100,15 @@ const haloIds = new Set(
 /** Rayon en racine de l'effectif : c'est l'aire du disque qui doit porter le
     nombre, pas son diamètre, sinon un foyer de 63 acteurs écrase la carte. */
 const radius = (n) => Math.round((4 + Math.sqrt(n) * 1.9) * 10) / 10;
+
+/** La landing n'a qu'un jeu de foyers : elle ne cadre sur rien, la grille fine
+    y serait un pâté. La carte de travail porte les deux. */
+const niveaux = interactif
+  ? [
+      { nom: "large", points: mapPoints },
+      { nom: "fin", points: mapPointsFins },
+    ]
+  : [{ nom: "large", points: mapPoints }];
 
 const label =
   `Carte de la zone Océan Indien, de l'Afrique de l'Est à l'Australie. ` +
@@ -226,50 +235,58 @@ const label =
     ))}
   </g>
 
-  <g class="nodes">
-    {mapPoints.map((p, i) => (
-      <g
-        class="node"
-        data-family={p.f}
-        data-count={p.n}
-        data-country={p.country}
-        {...(interactif && {
-          role: "button",
-          tabindex: "0",
-          // Le filtre teste `data-fams`, jamais `data-family` : celle-ci est la
-          // dominante, qui ne sert qu'à la couleur et à l'isolement de la
-          // landing. Filtrer dessus éteindrait les 14 foyers qui abritent un
-          // CERT sans être à dominante CERT.
-          "data-fams": p.fams,
-          // Index de rendu : la clé qui relie ce foyer à son panneau prérendu.
-          // Valable le temps d'un build, jamais exposée dans une URL — un
-          // centroïde se déplace au moindre réexport.
-          "data-idx": String(i),
-          "aria-label": `${p.n} acteur${p.n > 1 ? "s" : ""}${p.country ? ` — ${p.country}` : ""}`,
-        })}
-      >
-        {haloIds.has(`${p.x}:${p.y}`) && (
-          <circle class="node-halo" cx={p.x} cy={p.y} r={radius(p.n) * 2.4} fill={p.c} />
-        )}
-        <circle
-          cx={p.x}
-          cy={p.y}
-          r={radius(p.n)}
-          fill={p.c}
-          fill-opacity="0.3"
-          stroke={p.c}
-          stroke-width="1.8"
-        />
-        <circle cx={p.x} cy={p.y} r={Math.max(2, radius(p.n) * 0.32)} fill={p.c} />
-        {/* L'infobulle native reste au mode non interactif. En interactif,
-            `aria-label` porte déjà la même phrase et le `<title>` la ferait
-            annoncer deux fois. */}
-        {!interactif && (
-          <title>{p.n} acteur{p.n > 1 ? "s" : ""}{p.country ? ` — ${p.country}` : ""}</title>
-        )}
-      </g>
-    ))}
-  </g>
+  {/* Deux jeux de foyers en mode interactif, un seul sur la landing.
+      La page montre « large » au bassin et bascule sur « fin » dès qu'un pays
+      est cadré : au demi-degré, La Réunion tient dans une cellule et ses 45
+      acteurs — 43 adresses distinctes sur 19 communes — s'écrasent en 3
+      disques. Au centième de degré, ils en font 30. */}
+  {niveaux.map(({ nom, points }) => (
+    <g class="nodes" data-niveau={interactif ? nom : undefined} hidden={nom === "fin"}>
+      {points.map((p, i) => (
+        <g
+          class="node"
+          data-family={p.f}
+          data-count={p.n}
+          data-country={p.country}
+          {...(interactif && {
+            role: "button",
+            tabindex: "0",
+            // Le filtre teste `data-fams`, jamais `data-family` : celle-ci est la
+            // dominante, qui ne sert qu'à la couleur et à l'isolement de la
+            // landing. Filtrer dessus éteindrait les foyers qui abritent un CERT
+            // sans être à dominante CERT.
+            "data-fams": p.fams,
+            // Clé du panneau prérendu, préfixée par le niveau : les deux jeux
+            // ont chacun leur propre indexation. Valable le temps d'un build,
+            // jamais exposée dans une URL — un centroïde se déplace au moindre
+            // réexport.
+            "data-idx": `${nom}-${i}`,
+            "aria-label": `${p.n} acteur${p.n > 1 ? "s" : ""}${p.country ? ` — ${p.country}` : ""}`,
+          })}
+        >
+          {nom === "large" && haloIds.has(`${p.x}:${p.y}`) && (
+            <circle class="node-halo" cx={p.x} cy={p.y} r={radius(p.n) * 2.4} fill={p.c} />
+          )}
+          <circle
+            cx={p.x}
+            cy={p.y}
+            r={radius(p.n)}
+            fill={p.c}
+            fill-opacity="0.3"
+            stroke={p.c}
+            stroke-width="1.8"
+          />
+          <circle cx={p.x} cy={p.y} r={Math.max(2, radius(p.n) * 0.32)} fill={p.c} />
+          {/* L'infobulle native reste au mode non interactif. En interactif,
+              `aria-label` porte déjà la même phrase et le `<title>` la ferait
+              annoncer deux fois. */}
+          {!interactif && (
+            <title>{p.n} acteur{p.n > 1 ? "s" : ""}{p.country ? ` — ${p.country}` : ""}</title>
+          )}
+        </g>
+      ))}
+    </g>
+  ))}
   </g>
 </svg>
 

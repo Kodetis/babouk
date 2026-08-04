@@ -6,6 +6,7 @@ import MapOceanIndien from "../components/MapOceanIndien.astro";
 import {
   FAMILIES,
   mapPoints,
+  mapPointsFins,
   familyFacets,
   countryFacets,
   coverage,
@@ -57,6 +58,13 @@ function lieu(p) {
 
 /** Acteurs hors carte : sans coordonnées, plus celui qui tombe hors du cadre. */
 const horsCarte = coverage.unlocated + coverage.offFrame;
+
+/** Un panneau par foyer et par niveau : les deux jeux ont leur propre
+    indexation, la clé la porte. */
+const niveaux = [
+  { nom: "large", points: mapPoints },
+  { nom: "fin", points: mapPointsFins },
+];
 
 const CONTRACT = `<!--
       THESIS: Une carte de travail, pas une illustration. On clique un foyer,
@@ -201,9 +209,9 @@ const CONTRACT = `<!--
               </p>
             </div>
 
-            {mapPoints.map((p, i) => (
+            {niveaux.flatMap(({ nom, points }) => points.map((p, i) => (
               <section
-                data-panneau={String(i)}
+                data-panneau={`${nom}-${i}`}
                 hidden
                 aria-label={`Acteurs du foyer de ${lieu(p)}`}
                 class="flex min-h-0 flex-col"
@@ -271,7 +279,7 @@ const CONTRACT = `<!--
                   ))}
                 </ul>
               </section>
-            ))}
+            )))}
 
             {/* Permanent, sous le panneau quel que soit son état. Les masquer
                 serait le seul vrai mensonge possible sur une page qui s'appelle
@@ -310,19 +318,41 @@ const CONTRACT = `<!--
   };
 
   const carte = document.querySelector<HTMLElement>("[data-carte]");
-  const foyers = Array.from(document.querySelectorAll<SVGGElement>(".node[role='button']"));
   const boutons = Array.from(document.querySelectorAll<HTMLElement>("[data-facet]"));
   const hote = document.querySelector<HTMLElement>("[data-panneau-hote]");
   const invite = document.querySelector<HTMLElement>("#panneau-invite");
-  const panneaux = Array.from(document.querySelectorAll<HTMLElement>("[data-panneau]"));
+  const panneaux = new Map(
+    Array.from(document.querySelectorAll<HTMLElement>("[data-panneau]"))
+      .map((s) => [s.dataset.panneau ?? "", s])
+  );
+
+  /**
+   * Deux jeux de foyers, un seul visible.
+   *
+   * « large » agrège au demi-degré : c'est la lecture du bassin, qui couvre
+   * 148° de longitude. « fin » agrège au centième : c'est la seule qui montre
+   * quelque chose à l'échelle d'une île — La Réunion mesure moins d'un
+   * demi-degré, ses 45 acteurs y font 3 disques au lieu de 30.
+   *
+   * On bascule sur « fin » dès qu'un pays est cadré, parce que c'est là que la
+   * place existe pour les distinguer.
+   */
+  const groupes = new Map(
+    Array.from(document.querySelectorAll<SVGGElement>(".nodes[data-niveau]"))
+      .map((g) => [g.dataset.niveau ?? "", g])
+  );
+  let niveau: "large" | "fin" = "large";
+  const foyersVisibles = () =>
+    Array.from(groupes.get(niveau)?.querySelectorAll<SVGGElement>(".node") ?? []);
   const vide = document.querySelector<HTMLElement>("#vide");
   const videCause = document.querySelector<HTMLElement>("#vide-cause");
   const versAnnuaire = document.querySelector<HTMLAnchorElement>("#vers-annuaire");
 
   if (carte && hote && versAnnuaire) {
-    /** Foyer ouvert, ou `null`. C'est un état d'écran : jamais dans l'URL, car
-        l'identifiant d'un foyer est un centroïde recalculé à chaque export. */
-    let ouvert: number | null = null;
+    /** Clé du foyer ouvert (`large-12`, `fin-40`), ou `null`. C'est un état
+        d'écran : jamais dans l'URL, car l'identifiant d'un foyer est un
+        centroïde recalculé à chaque export. */
+    let ouvert: string | null = null;
 
     const libelle = (axe: string, valeur: string) => {
       const b = boutons.find((x) => x.dataset.facet === axe && (x.dataset.value ?? "") === valeur);
@@ -374,9 +404,10 @@ const CONTRACT = `<!--
      * ferait mentir l'écran.
      */
     function refletPanneau() {
-      if (ouvert === null) return;
+      const section = ouvert === null ? null : panneaux.get(ouvert);
+      if (!section) return;
       const actif = etat.famille !== null || etat.pays !== null;
-      for (const li of panneaux[ouvert].querySelectorAll<HTMLElement>("[data-acteur]")) {
+      for (const li of section.querySelectorAll<HTMLElement>("[data-acteur]")) {
         const hors = actif && !passe(li.dataset.f ?? "", li.dataset.c ?? "");
         li.toggleAttribute("data-hors-filtre", hors);
         li.querySelector("[data-mention]")?.toggleAttribute("hidden", !hors);
@@ -384,8 +415,11 @@ const CONTRACT = `<!--
     }
 
     function appliquer() {
+      // Le cadrage d'abord : il choisit le niveau, donc les foyers à filtrer.
+      cadrer();
+
       let visibles = 0;
-      for (const foyer of foyers) {
+      for (const foyer of foyersVisibles()) {
         const ok = passe(foyer.dataset.fams ?? "", foyer.dataset.country ?? "");
         foyer.toggleAttribute("data-eteint", !ok);
         if (ok) visibles++;
@@ -417,7 +451,6 @@ const CONTRACT = `<!--
       versAnnuaire.dataset.base = base;
       versAnnuaire.href = p.toString() ? `${base}?${p}` : base;
 
-      cadrer();
       refletFacettes();
       refletPanneau();
       ecrireUrl();
@@ -442,19 +475,31 @@ const CONTRACT = `<!--
       );
       // Un pays sans foyer géolocalisé n'a pas de cadrage : on reste au bassin
       // entier plutôt que de zoomer sur du vide.
-      const c = b?.dataset.cadrage ? JSON.parse(b.dataset.cadrage) : { k: 1, tx: 0, ty: 0 };
-      g.style.setProperty("--k", String(c.k));
-      g.style.setProperty("--tx", String(c.tx));
-      g.style.setProperty("--ty", String(c.ty));
+      const c = b?.dataset.cadrage ? JSON.parse(b.dataset.cadrage) : null;
+      const { k, tx, ty } = c ?? { k: 1, tx: 0, ty: 0 };
+      g.style.setProperty("--k", String(k));
+      g.style.setProperty("--tx", String(tx));
+      g.style.setProperty("--ty", String(ty));
+
+      // Le niveau suit le cadrage : la grille fine n'a de sens que là où il y a
+      // la place de séparer les foyers.
+      const voulu = c ? "fin" : "large";
+      if (voulu === niveau) return;
+      // Le panneau ouvert appartient au niveau qu'on quitte : sa clé n'existe
+      // plus dans le jeu affiché, on referme plutôt que de laisser un panneau
+      // sans foyer correspondant.
+      fermer();
+      niveau = voulu;
+      for (const [nom, groupe] of groupes) groupe.toggleAttribute("hidden", nom !== niveau);
     }
 
     /* -------------------------------------------------------------- panneau */
 
     function fermer(rendreFocus = false) {
       if (ouvert === null) return;
-      panneaux[ouvert].hidden = true;
-      foyers.forEach((f) => f.removeAttribute("data-actif"));
-      const precedent = foyers.find((f) => Number(f.dataset.idx) === ouvert);
+      const precedent = document.querySelector<SVGGElement>(`.node[data-idx="${ouvert}"]`);
+      panneaux.get(ouvert)!.hidden = true;
+      precedent?.removeAttribute("data-actif");
       ouvert = null;
       invite?.removeAttribute("hidden");
       hote.removeAttribute("data-ouvert");
@@ -462,21 +507,24 @@ const CONTRACT = `<!--
     }
 
     function ouvrir(foyer: SVGGElement) {
-      const idx = Number(foyer.dataset.idx);
-      if (Number.isNaN(idx) || !panneaux[idx]) return;
-      if (ouvert !== null) panneaux[ouvert].hidden = true;
+      const cle = foyer.dataset.idx ?? "";
+      const section = panneaux.get(cle);
+      if (!section) return;
+      if (ouvert !== null) panneaux.get(ouvert)!.hidden = true;
 
-      foyers.forEach((f) => f.removeAttribute("data-actif"));
+      for (const actif of document.querySelectorAll(".node[data-actif]")) {
+        actif.removeAttribute("data-actif");
+      }
       foyer.setAttribute("data-actif", "");
       invite?.setAttribute("hidden", "");
-      panneaux[idx].hidden = false;
+      section.hidden = false;
       hote.setAttribute("data-ouvert", "");
-      ouvert = idx;
+      ouvert = cle;
 
       refletPanneau();
       // Le focus part sur le titre : le lecteur d'écran enchaîne lieu, effectif
       // puis liste, au lieu de reprendre au début du document.
-      panneaux[idx].querySelector<HTMLElement>("h2")?.focus();
+      section.querySelector<HTMLElement>("h2")?.focus();
     }
 
     /* -------------------------------------------------------------- écoutes */
@@ -500,12 +548,14 @@ const CONTRACT = `<!--
       });
     }
 
-    const nodes = document.querySelector(".nodes");
-    nodes?.addEventListener("click", (e) => {
+    // Délégation sur la carte entière plutôt que sur un groupe de foyers : il y
+    // en a deux, et celui qui écoute doit rester le même quand on bascule.
+    const svg = carte.querySelector("svg");
+    svg?.addEventListener("click", (e) => {
       const foyer = (e.target as Element).closest<SVGGElement>(".node[role='button']");
       if (foyer) ouvrir(foyer);
     });
-    nodes?.addEventListener("keydown", (e) => {
+    svg?.addEventListener("keydown", (e) => {
       const ev = e as KeyboardEvent;
       if (ev.key !== "Enter" && ev.key !== " ") return;
       const foyer = (ev.target as Element).closest<SVGGElement>(".node[role='button']");
