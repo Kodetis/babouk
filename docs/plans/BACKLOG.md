@@ -33,18 +33,46 @@ vient du recensement et ce qui a été retrouvé sur le web.
 ce qu'on fait des fiches introuvables, et si la page signale visuellement une
 donnée enrichie.
 
+## Animation des flux sur la carte de la landing à faire avec FABLE 5
+
+**Demandé par tibo, décision assumée.** Les arcs de la carte du héros sont un
+effet visuel, pas une donnée. Ils restent, et ils doivent aller jusqu'à
+l'Australie — aujourd'hui elle n'est reliée à rien. Le but est le mouvement à
+l'arrivée sur la page : un bassin qui vit, pas des points posés.
+
+C'est un parti pris décoratif, connu comme tel : la source ne contient aucune
+relation entre acteurs. `partenaires` n'est renseigné que sur 1 fiche sur 685,
+et il s'agit d'une phrase de présentation, pas d'une liste. La mention « arcs
+illustratifs » reste affichée sous la carte.
+
+**Ce qui bloque aujourd'hui, mesuré.** `mapArcs` dans `src/lib/data.js` écarte
+les paires distantes de plus de 900 unités de viewBox. Or les trois foyers
+australiens sont entre **770 et 1139** de tout le reste, et la distance
+maximale entre les quatorze plus gros foyers est de 1139. Le plafond coupe donc
+l'Australie presque entièrement.
+
+    const HUBS = 14
+    if (d < 90 || d > 900) continue      // <- le 900 exclut l'Australie
+    .slice(0, 26)                        // <- puis on ne garde que 26 arcs
+
+Relever le plafond à ~1150 suffit à connecter l'Australie. Reste à ajuster le
+nombre d'arcs conservés pour que la carte ne devienne pas un plat de
+spaghettis, et à vérifier que les arcs longs ne traversent pas les terres de
+façon disgracieuse — la flèche vaut 18 % de la corde, ce qui se voit sur une
+corde de 1100.
+
+À faire en même temps : le balayage d'apparition des 55 foyers d'ouest en est
+au chargement, qui est l'autre moitié de l'effet.
+
 ## Liens documentés entre acteurs
 
-La source ne contient aucune relation : `partenaires` n'est renseigné que sur
-1 fiche sur 685, et il s'agit d'une phrase de présentation, pas d'une liste.
+Indépendant de l'animation ci-dessus, et pour plus tard : une couche de liens
+réellement sourcés — CyberTour, évènements CLUSIR, projets EDIH — alimentée à
+la main. Distincte des arcs décoratifs, et vide tant qu'il n'y a rien de
+documenté à y mettre.
 
-Les arcs de la carte ne mesurent donc rien et seront retirés. À leur place,
-une couche de liens réellement documentés — CyberTour, évènements CLUSIR,
-projets EDIH — alimentée à la main au fil de l'animation du réseau. Elle reste
-vide tant qu'il n'y a rien de sourcé à y mettre.
-
-C'est le livrable du WP6 pris à l'endroit : l'animation produit le maillage,
-la carte l'enregistre.
+C'est le livrable du WP6 pris à l'endroit : l'animation produit le maillage, la
+carte l'enregistre.
 
 ## Mode clair
 
