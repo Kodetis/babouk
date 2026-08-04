@@ -3,7 +3,19 @@
 Ce qui est décidé mais pas encore fait. Un chantier quitte cette liste quand il
 a son propre document de design ou qu'il est livré.
 
-## Enrichissement des fiches incomplètes
+## Répartition du travail
+
+**Fable 5 conçoit et relit. Opus 5 exécute.**
+
+Fable rédige les designs et les plans d'implémentation, et relit en mode
+adverse — sa relecture du design de la carte a trouvé quatre affirmations
+fausses sur le code existant, dont une qui cassait le pont carte↔annuaire.
+Cette relecture adverse est systématique avant exécution : un design non relu
+n'est pas un design.
+
+Opus 5 exécute le plan, vérifie au navigateur et commite.
+
+## Enrichissement des fiches incomplètes — design par Fable 5
 
 **Le manque.** 113 fiches sur 685 n'ont ni pays ni adresse exploitable, 115
 n'ont pas de coordonnées. Elles comptent dans le total mais n'apparaissent ni
@@ -74,7 +86,7 @@ documenté à y mettre.
 C'est le livrable du WP6 pris à l'endroit : l'animation produit le maillage, la
 carte l'enregistre.
 
-## Mode clair
+## Mode clair — design par Fable 5
 
 Les huit accents de famille sont vérifiés à 4,5:1 **sur le fond marine**. Sur
 fond clair ils s'effondrent — l'or `#ffde59` tombe à environ 1,3:1 sur blanc,
