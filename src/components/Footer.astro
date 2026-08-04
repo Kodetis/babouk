@@ -1,0 +1,44 @@
+---
+import { coverage } from "../lib/data.js";
+---
+
+<footer class="border-t border-white/[0.06] py-12">
+  <div class="mx-auto max-w-7xl px-6">
+    <div class="flex flex-col items-center justify-between gap-6 md:flex-row">
+      <a href="/" class="group flex items-center gap-3" aria-label="Babouk — accueil">
+        <img src="/logo-babouk-mark.png" alt="" width="256" height="242" class="logo-mark h-9 shrink-0" />
+        <span class="font-display text-base font-bold tracking-[0.18em] text-white">BABOUK</span>
+      </a>
+
+      <p class="meta text-center text-white/55">
+        {coverage.total} acteurs · {coverage.countries} pays · Zone Océan Indien
+      </p>
+
+      <div class="flex items-center gap-4">
+        <a
+          href="/acteurs.csv"
+          download
+          class="meta text-white/50 transition-colors hover:text-gold"
+        >
+          acteurs.csv
+        </a>
+        <span class="text-white/10" aria-hidden="true">|</span>
+        <a href="#contenu" class="meta text-white/50 transition-colors hover:text-gold">
+          ↑ Haut de page
+        </a>
+      </div>
+    </div>
+
+    <div
+      class="mt-8 flex flex-col items-center gap-2 border-t border-white/[0.06] pt-6 text-center md:flex-row md:justify-between md:text-left"
+    >
+      <p class="text-xs leading-relaxed text-white/55">
+        Un projet <span class="text-white/60">Kodetis</span>. Données issues de l'annuaire
+        Communecter de l'EDIH La Réunion.
+      </p>
+      <p class="text-xs leading-relaxed text-white/55">
+        Babouk n'est ni mandaté ni endossé par les organisations citées.
+      </p>
+    </div>
+  </div>
+</footer>

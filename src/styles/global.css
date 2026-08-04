@@ -1,0 +1,458 @@
+@import "tailwindcss";
+
+/* ========== FONTES ==========
+   Transposition de la charte cybertour.re (CYBERTOUR_DESIGN.md §3). Les deux
+   fontes de titrage d'origine sont commerciales et ne sont pas licenciées pour
+   ce projet ; elles sont remplacées, la troisième est reprise telle quelle.
+
+     ITC Avant Garde  ->  Jost          grotesque géométrique, même famille
+                                        formelle (dérivée de la Futura), axe de
+                                        graisse variable 400-700 contre quatre
+                                        fichiers statiques à l'origine.
+     Ambroise         ->  Bodoni Moda   didone de titrage. Playfair Display,
+                                        proposé dans le document d'ADN, a un
+                                        contraste trop mou pour tenir le rôle
+                                        d'Ambroise ; Bodoni Moda porte un axe
+                                        `opsz` qui affine réellement les déliés
+                                        au-delà de 48 pt, ce qui est le geste
+                                        même de la fonte remplacée.
+     JetBrains Mono   ->  inchangée     déjà libre (SIL OFL 1.1) dans le projet
+                                        source : aucune raison de substituer.
+
+   Sous-ensembles latins récupérés depuis Google Fonts, servis en local :
+   104 Ko pour les trois familles, contre sept fichiers à l'origine. */
+@font-face {
+  font-family: "Jost";
+  src: url("/fonts/jost.woff2") format("woff2");
+  font-weight: 400 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Bodoni Moda";
+  src: url("/fonts/bodoni-moda.woff2") format("woff2");
+  font-weight: 400 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/jetbrains-mono.woff2") format("woff2");
+  font-weight: 400 700;
+  font-display: swap;
+}
+
+@theme {
+  /* Palette CLUSIR reprise sans modification (CYBERTOUR_DESIGN.md §2). */
+  --color-navy: #21314e;
+  --color-navy-dark: #0f1a30;
+  --color-slate-deep: #192842;
+  --color-slate-mid: #21314e;
+
+  /* Rouge de charte : aplats, bordures et focus. 3,77:1 sur le fond — jamais
+     de texte. La variante claire ci-dessous est la seule qui écrit. */
+  --color-clusir-red: #ce463a;
+  --color-clusir-red-bright: #e56b5f; /* 5,45:1 sur #0f1a30 */
+
+  --color-gold: #ffde59;
+  --color-gold-dim: #d4b84a;
+
+  /* Accents des 8 familles d'acteurs. Cinq viennent de la charte, trois sont
+     créés pour compléter le jeu. Tous vérifiés >= 4,5:1 sur le fond de page et
+     sur la surface de carte (blanc 3 %) ; le plus faible est le bleu à 4,55. */
+  --color-fam-entreprises: #5b8cc9;
+  --color-fam-defense: #8fb573;
+  --color-fam-formation: #e6a23c;
+  --color-fam-reseaux: #4db6ac;
+  --color-fam-cert: #e56b5f;
+  --color-fam-recherche: #9d8ec9;
+  --color-fam-association: #d98cb0;
+  --color-fam-accompagnement: #d4b84a;
+
+  --font-display: "Jost", system-ui, sans-serif;
+  --font-body: "Jost", system-ui, sans-serif;
+  --font-serif: "Bodoni Moda", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+:root {
+  --bg-primary: #0f1a30;
+  --bg-secondary: #192842;
+  --bg-card: rgba(255, 255, 255, 0.03);
+  --border-card: rgba(255, 255, 255, 0.06);
+  --nav-scrolled: rgba(15, 26, 48, 0.95);
+  --grid-color: rgba(44, 62, 107, 0.12);
+  --scrollbar-thumb: #2c3e6b;
+
+  /* Trois valeurs, une seule teinte. L'océan descend sous le fond de page, les
+     terres montent au-dessus, et les treize pays du recensement montent encore
+     d'un cran : la hiérarchie de la carte se lit sans introduire de couleur. */
+  --map-sea: #0a1120;
+  --map-land: #182742;
+  --map-land-scope: #263b60;
+  --map-stroke: rgba(120, 150, 200, 0.2);
+  --map-stroke-scope: rgba(165, 198, 245, 0.55);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* La barre de navigation est fixe : sans cette marge, une ancre ouvre sa
+   section avec le label et le haut du titre passés dessous. */
+:target,
+section[id] {
+  scroll-margin-top: 6rem;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: #ffffff;
+}
+
+::selection {
+  background: rgba(255, 222, 89, 0.25);
+  color: #ffffff;
+}
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-primary); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-clusir-red); }
+
+/* Anneau de focus unique pour tout le site. L'or est le seul accent qui tienne
+   4,5:1 sur chacune des surfaces de la page, fond de carte compris. */
+:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* ========== TYPOGRAPHIE ========== */
+
+.section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: rgba(255, 222, 89, 0.7);
+  padding-left: 0.75rem;
+  border-left: 2px solid rgba(255, 222, 89, 0.35);
+  line-height: 1.4;
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 2.25rem;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+@media (min-width: 640px) { .section-title { font-size: 3rem; } }
+@media (min-width: 768px) { .section-title { font-size: 3.5rem; } }
+
+/* Accent éditorial. Même intention que la classe `.font-serif` de la charte
+   d'origine, recalibrée pour Bodoni Moda :
+
+   - `opsz` poussé à 96 : c'est l'axe qui creuse le contraste et affine les
+     empattements. Sans lui, la variable rend sa coupe de labeur et la didone
+     n'est plus qu'un serif ordinaire.
+   - +4 % de corps seulement, contre +8 % pour Ambroise : la hauteur d'x de
+     Bodoni Moda est déjà plus proche de celle de Jost.
+   - `font-synthesis: none` conservé : aucune fausse graisse, aucun faux
+     italique si une utilitaire traîne sur un descendant. */
+.font-editorial {
+  font-family: var(--font-serif);
+  font-variation-settings: "opsz" 96;
+  font-weight: 400;
+  font-style: normal;
+  font-synthesis: none;
+  font-size: 1.04em;
+  line-height: 1.3;
+  letter-spacing: 0.005em;
+}
+
+/* Chiffre de relevé. Le point de mesure de toute la page. */
+.readout {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.meta {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 1.4;
+}
+
+/* Marque Babouk. Image crème à canal alpha, et non masque CSS : la barre de
+   navigation porte un `backdrop-filter` une fois défilée, et un `mask-image`
+   sur un descendant y perce le flou d'arrière-plan sous Chromium. */
+.logo-mark {
+  display: block;
+  width: auto;
+  object-fit: contain;
+  transition: transform 0.3s ease;
+}
+.group:hover .logo-mark {
+  transform: scale(1.05);
+}
+
+/* Mot évidé du titre principal — reprise de `.reunion-outline`. */
+.outline-word {
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgba(255, 255, 255, 0.3);
+  transition: -webkit-text-stroke-color 0.4s ease;
+}
+.outline-word:hover { -webkit-text-stroke-color: var(--color-clusir-red); }
+
+/* ========== BOUTONS ========== */
+
+.btn-primary {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  background: var(--color-clusir-red);
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-weight: 700;
+  padding: 0.9rem 2rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 0.5rem;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(255, 222, 89, 0.3);
+}
+.btn-primary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 3s infinite;
+  pointer-events: none;
+}
+
+.btn-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  border: 2px solid var(--color-clusir-red);
+  color: var(--color-clusir-red-bright);
+  font-family: var(--font-display);
+  font-weight: 600;
+  padding: 0.7rem 1.6rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 0.5rem;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+.btn-outline:hover { background: var(--color-clusir-red); color: #ffffff; }
+
+/* Action différée. Reprend le badge « bientôt » de la charte : ni lien, ni
+   bouton — un libellé qui annonce son indisponibilité au lieu de la cacher. */
+.btn-soon {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.6);
+  font-family: var(--font-display);
+  font-weight: 600;
+  padding: 0.7rem 1.6rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 0.5rem;
+  cursor: default;
+  user-select: none;
+}
+
+.badge-soon {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid rgba(255, 222, 89, 0.4);
+  background: rgba(255, 222, 89, 0.1);
+  color: var(--color-gold);
+}
+
+/* ========== SURFACES ========== */
+
+.panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: 1rem;
+}
+
+/* Accent latéral de famille, repris de `.bento-track` (3 px, rayon 0 2px 2px 0).
+   Contrairement à `.topic-card`, il est posé au repos et non révélé au survol :
+   c'est le seul marqueur qui distingue une famille d'une autre au premier coup
+   d'œil, et huit panneaux identiques ne se lisent pas.
+
+   Il se déploie du tiers à la pleine hauteur au survol, en `scaleY` : animer
+   `height` déclencherait un layout à chaque frame. */
+.accent-card {
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.accent-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3px;
+  height: 100%;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent, var(--color-clusir-red));
+  transform: scaleY(0.34);
+  transform-origin: top;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.accent-card:hover { border-color: rgba(255, 255, 255, 0.15); }
+.accent-card:hover::before { transform: scaleY(1); }
+
+/* ========== TEXTURES ========== */
+
+.cyber-grid {
+  background-image:
+    linear-gradient(var(--grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+  background-size: 60px 60px;
+  animation: grid-pulse 4s ease-in-out infinite;
+}
+
+.noise-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ========== MOUVEMENT ========== */
+
+@keyframes grid-pulse {
+  0%, 100% { opacity: 0.03; }
+  50% { opacity: 0.08; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.12); }
+}
+
+@keyframes scan-line {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translate3d(0, 24px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+/* Le flou de la lueur est fixe : l'animer en boucle repeint une large surface
+   à chaque frame. Seules l'opacité et l'échelle bougent. */
+.animate-pulse-glow {
+  filter: blur(60px);
+  will-change: opacity, transform;
+  animation: pulse-glow 5s ease-in-out infinite;
+}
+.animate-scan { animation: scan-line 9s linear infinite; }
+
+.reveal,
+.reveal-left,
+.reveal-right {
+  opacity: 0;
+  transition:
+    opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal { transform: translateY(40px); }
+.reveal-left { transform: translateX(-40px); }
+.reveal-right { transform: translateX(40px); }
+.reveal.visible,
+.reveal-left.visible,
+.reveal-right.visible {
+  opacity: 1;
+  transform: none;
+}
+
+.delay-1 { transition-delay: 0.1s; }
+.delay-2 { transition-delay: 0.2s; }
+.delay-3 { transition-delay: 0.3s; }
+.delay-4 { transition-delay: 0.4s; }
+.delay-5 { transition-delay: 0.5s; }
+.delay-6 { transition-delay: 0.6s; }
+
+/* ========== MOBILE ========== */
+
+@media (max-width: 767px) {
+  .reveal { transform: translateY(20px); }
+  .reveal-left { transform: translateX(-20px); }
+  .reveal-right { transform: translateX(20px); }
+  .reveal, .reveal-left, .reveal-right { transition-duration: 0.4s; }
+  .delay-1 { transition-delay: 0.05s; }
+  .delay-2 { transition-delay: 0.1s; }
+  .delay-3 { transition-delay: 0.15s; }
+  .delay-4 { transition-delay: 0.2s; }
+  .delay-5 { transition-delay: 0.25s; }
+  .delay-6 { transition-delay: 0.3s; }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .accent-card:active {
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
+  }
+  .accent-card:active::before { transform: scaleY(1); }
+}
+
+/* ========== MOUVEMENT RÉDUIT ==========
+   Pas de coupe globale : les boucles décoratives s'arrêtent sur une valeur
+   médiane lisible, les révélations gardent leur état final, les retours
+   d'interaction survivent sans déplacement. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
+  .cyber-grid { animation: none; opacity: 0.05; }
+  .animate-pulse-glow { animation: none; opacity: 0.45; transform: none; }
+  .animate-scan { animation: none; opacity: 0; }
+  .btn-primary::after { animation: none; display: none; }
+  [style*="slide-up"] { animation: none !important; }
+
+  .reveal, .reveal-left, .reveal-right {
+    transform: none;
+    transition-duration: 0.01ms;
+    transition-delay: 0s;
+  }
+  .delay-1, .delay-2, .delay-3,
+  .delay-4, .delay-5, .delay-6 { transition-delay: 0s; }
+
+  .btn-primary, .btn-outline, .accent-card, .accent-card::before, .outline-word {
+    transition-duration: 0.01ms;
+  }
+  .btn-primary:hover { transform: none; }
+}

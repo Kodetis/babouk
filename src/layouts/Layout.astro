@@ -1,0 +1,105 @@
+---
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const {
+  title,
+  description = "Babouk recense 685 acteurs de la cybersécurité dans la zone Océan Indien : entreprises, CERT, laboratoires, organismes de formation, réseaux et services de l'État, de l'Afrique de l'Est à l'Australie.",
+} = Astro.props;
+
+const canonical = new URL(Astro.url.pathname, Astro.site);
+---
+
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#0f1a30" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href={canonical} />
+
+    {/*
+      Deux fontes préchargées, pas trois. Jost peint le titre et tout le corps
+      au-dessus de la ligne de flottaison ; JetBrains Mono peint la barre de
+      relevés du héros, qui est du texte de premier rendu et non un simple
+      label. Bodoni Moda n'apparaît qu'en exergue, sous la ligne de flottaison :
+      la précharger prendrait de la bande passante au titre.
+
+      `crossorigin` est obligatoire même en same-origin — les fontes sont
+      toujours récupérées en mode CORS, et sans lui le preload est ignoré puis
+      le fichier téléchargé deux fois.
+    */}
+    <link rel="preload" href="/fonts/jost.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/jetbrains-mono.woff2" as="font" type="font/woff2" crossorigin />
+
+    <meta name="robots" content="index, follow" />
+    <meta name="author" content="Kodetis" />
+
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="fr_FR" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:site_name" content="Babouk" />
+
+    <title>{title}</title>
+  </head>
+  <body class="font-body antialiased">
+    <!--
+      THESIS: Un poste de lecture de la filière, pas sa brochure. Refuse le hero
+      carte-en-decor-derriere-un-titre-centre : la carte est l'instrument, le
+      texte est sa legende, et les trous de la donnee sont affiches comme un
+      releve et non caches.
+      OWN-WORLD: Fond #0f1a30, terres bleu ardoise, or rare en accent de
+      lecture, rouge CLUSIR structurel jamais textuel. Jost geometrique, Bodoni
+      Moda en exergue, JetBrains Mono pour toute mesure. Panneaux blanc 3 % a
+      bordure blanc 6 %, accent lateral 3 px par famille, rails de telemetrie.
+      STORY: Le visiteur institutionnel voit une filiere repartie sur 13 pays,
+      comprend qu'elle ne se resume pas aux Mascareignes, et repart avec le
+      recensement ou l'attente de l'annuaire.
+      FIRST VIEWPORT: Carte plein cadre de Nairobi a Perth, foyers colores et
+      arcs qui circulent. Panneau console cale a gauche : titre en trois lignes
+      685 / 13 PAYS / UN OCEAN, sous-titre, deux actions. Rail de releves
+      colle au bas du cadre, pleine largeur.
+      FORM: Poste de supervision, 7e de la liste structurelle, seed 42786d61.
+      FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+    -->
+    <a
+      href="#contenu"
+      class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[200] focus:bg-gold focus:text-navy-dark focus:px-4 focus:py-2 focus:rounded-lg focus:font-bold"
+    >
+      Aller au contenu principal
+    </a>
+    <slot />
+
+    <script>
+      // Révélations au scroll — IntersectionObserver seul, aucun listener de
+      // scroll, donc aucun reflow synchrone forcé.
+      const revealed = document.querySelectorAll(".reveal, .reveal-left, .reveal-right");
+
+      if ("IntersectionObserver" in window) {
+        const observer = new IntersectionObserver(
+          (entries, obs) => {
+            for (const entry of entries) {
+              if (!entry.isIntersecting) continue;
+              entry.target.classList.add("visible");
+              obs.unobserve(entry.target);
+            }
+          },
+          { threshold: 0, rootMargin: "0px 0px -8% 0px" }
+        );
+        revealed.forEach((el) => observer.observe(el));
+      } else {
+        // Sans IntersectionObserver on révèle tout : mieux vaut perdre
+        // l'animation que laisser la page à `opacity: 0`.
+        revealed.forEach((el) => el.classList.add("visible"));
+      }
+    </script>
+  </body>
+</html>
