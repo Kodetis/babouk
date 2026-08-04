@@ -1,0 +1,11 @@
+# Site non indexable.
+#
+# Attention : GitHub Pages sert ce dépôt sous kodetis.github.io/babouk/, donc ce
+# fichier est publié à /babouk/robots.txt. Les robots ne lisent le robots.txt
+# qu'à la racine du domaine (kodetis.github.io/robots.txt), qui appartient au
+# dépôt kodetis.github.io, pas à celui-ci. Le blocage effectif est donc porté par
+# la balise <meta name="robots" content="noindex, nofollow"> du Layout.
+# Ce fichier reste ici pour couvrir le cas d'un service sur domaine dédié.
+
+User-agent: *
+Disallow: /

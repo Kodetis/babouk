@@ -99,6 +99,20 @@ const label =
   aria-label={label}
 >
   <defs>
+    {/* Cadre de découpe.
+
+        En `meet`, le viewBox est ajusté puis centré dans la boîte de l'élément :
+        quand le conteneur est plus haut que le rapport 1410:740, il reste des
+        bandes au-dessus et au-dessous du viewBox, et ces bandes ne sont PAS
+        clippées — `overflow:hidden` d'un svg racine clippe la boîte, pas le
+        viewBox. La Tasmanie descend à 43,6° S alors que la fenêtre s'arrête à
+        41° S : elle débordait donc de 34 unités sous le fond de mer, qui, lui,
+        s'arrête à la hauteur du viewBox. D'où l'île détachée sous une arête
+        horizontale nette. Les terres sont désormais coupées au cadre, comme
+        l'Afrique l'est déjà au bord ouest. */}
+    <clipPath id="map-frame">
+      <rect width={VIEW_WIDTH} height={VIEW_HEIGHT} />
+    </clipPath>
     {/* Lueur centrée sur le bassin, qui fait remonter l'océan sans introduire
         une seconde valeur de bleu : même teinte, opacité décroissante. */}
     <radialGradient id="sea-glow" cx="45%" cy="52%" r="62%">
@@ -135,7 +149,7 @@ const label =
     ))}
   </g>
 
-  <g class="landmass">
+  <g class="landmass" clip-path="url(#map-frame)">
     {countries.map((c) => (
       <path
         d={c.d}

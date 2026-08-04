@@ -74,7 +74,11 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     <link rel="preload" href={jostUrl} as="font" type="font/woff2" crossorigin />
     <link rel="preload" href={monoUrl} as="font" type="font/woff2" crossorigin />
 
-    <meta name="robots" content="index, follow" />
+    {/* Le site ne doit pas être indexé. C'est cette balise qui fait foi : sous
+        GitHub Pages, le robots.txt du dépôt est servi sous /babouk/ et n'est
+        jamais lu par les robots, qui n'interrogent que la racine du domaine. */}
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="googlebot" content="noindex, nofollow" />
     <meta name="author" content="Kodetis" />
 
     <meta property="og:title" content={title} />
