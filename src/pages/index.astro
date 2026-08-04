@@ -16,28 +16,27 @@ const readouts = [
   { value: nf.format(coverage.onMap), label: "sur la carte" },
 ];
 
-const leader = countryCounts[0];
-const leaderShare = Math.round((leader.count / coverage.total) * 100);
+/**
+ * Libellés au pluriel pour l'énumération de la section Familles. Les étiquettes
+ * courtes de FAMILIES sont taillées pour une pastille de légende — « Défense /
+ * Intérieur », « Accompagnement » — et ne se lisent pas dans une phrase.
+ */
+const LIBELLES = {
+  entreprises: "entreprises de produits et de services",
+  defense: "services de défense et d'intérieur",
+  formation: "organismes de formation",
+  reseaux: "réseaux et clusters",
+  cert: "CERT et CSIRT",
+  recherche: "laboratoires de recherche",
+  association: "associations et ONG",
+  accompagnement: "structures d'accompagnement et de financement",
+};
+
+/** Référence des barres de la section Territoire : le plus gros effectif fait 100 %. */
 const maxCountry = countryCounts[0].count;
-const maxFamily = familyCounts[0].count;
 
-/** Part des acteurs situés hors des Mascareignes, parmi ceux dont le pays est connu. */
-const MASCAREIGNES = ["La Réunion", "Maurice", "Madagascar", "Seychelles", "Comores"];
+/** Acteurs rattachés à un pays. Les autres restent dans le total, jamais retranchés. */
 const withCountry = coverage.total - coverage.withoutCountry;
-const islandCount = countryCounts
-  .filter((c) => MASCAREIGNES.includes(c.country))
-  .reduce((sum, c) => sum + c.count, 0);
-const outsideIslandsShare = Math.round(((withCountry - islandCount) / withCountry) * 100);
-
-/** Poids du trio de tête face à l'ensemble des îles du bassin, Mascareignes comprises. */
-const ISLANDS = [...MASCAREIGNES, "Sri Lanka", "Maldives"];
-const islandsCount = countryCounts
-  .filter((c) => ISLANDS.includes(c.country))
-  .reduce((sum, c) => sum + c.count, 0);
-const topThree = countryCounts.slice(0, 3);
-const topThreeCount = topThree.reduce((sum, c) => sum + c.count, 0);
-const leaderShareLocated = Math.round((leader.count / withCountry) * 100);
-const reunionRank = countryCounts.findIndex((c) => c.country === "La Réunion") + 1;
 ---
 
 <Layout title="Babouk — les acteurs cyber de l'océan Indien">
@@ -113,8 +112,10 @@ const reunionRank = countryCounts.findIndex((c) => c.country === "La Réunion") 
           class="font-display font-bold leading-[0.92] tracking-[-0.03em]"
           style="animation:slide-up .8s cubic-bezier(.16,1,.3,1) both"
         >
-          <span class="block text-[clamp(2.5rem,6.5vw,4.25rem)] text-white">Une filière</span>
-          <span class="block text-[clamp(2.5rem,6.5vw,4.25rem)] text-gold">sans capitale</span>
+          <span class="block text-[clamp(2.5rem,6.5vw,4.25rem)] text-white">
+            {nf.format(coverage.total)} acteurs
+          </span>
+          <span class="block text-[clamp(2.5rem,6.5vw,4.25rem)] text-gold">de la cybersécurité</span>
           <span
             class="outline-word mt-4 block text-[clamp(1rem,2.6vw,1.75rem)] font-medium tracking-[0.24em]"
           >
@@ -126,28 +127,31 @@ const reunionRank = countryCounts.findIndex((c) => c.country === "La Réunion") 
           class="mt-8 max-w-xl text-lg leading-relaxed text-white/70"
           style="animation:slide-up .8s cubic-bezier(.16,1,.3,1) .15s both"
         >
-          <strong class="font-semibold text-white">{nf.format(coverage.total)} acteurs</strong> de la
-          cybersécurité recensés dans <strong class="font-semibold text-white">{coverage.countries} pays</strong>,
-          de l'Afrique de l'Est à l'Australie. Le premier d'entre eux — {leader.country},
-          avec {leader.count} — n'en rassemble que {leaderShare}&nbsp;%.
+          Entreprises, services de l'État, laboratoires, centres de formation, CERT et réseaux
+          professionnels, recensés dans
+          <strong class="font-semibold text-white">{coverage.countries} pays</strong> — de
+          l'Afrique de l'Est à l'Australie.
         </p>
 
         <div
           class="mt-9 flex flex-col items-start gap-4 sm:flex-row sm:items-center"
           style="animation:slide-up .8s cubic-bezier(.16,1,.3,1) .3s both"
         >
-          <a href={asset("acteurs.csv")} download class="btn-primary">
-            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-            </svg>
-            Télécharger le recensement
-          </a>
-          <a href={asset("annuaire/")} class="btn-outline">
+          {/* L'annuaire passe en action principale : la page sert à trouver un
+              acteur, pas à repartir avec un fichier. Le recensement reste
+              disponible juste à côté. */}
+          <a href={asset("annuaire/")} class="btn-primary">
             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <circle cx="11" cy="11" r="7" />
               <path stroke-linecap="round" d="m20 20-3.5-3.5" />
             </svg>
             Parcourir l'annuaire
+          </a>
+          <a href={asset("acteurs.csv")} download class="btn-outline">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+            </svg>
+            Télécharger le recensement
           </a>
         </div>
       </div>
@@ -226,13 +230,18 @@ const reunionRank = countryCounts.findIndex((c) => c.country === "La Réunion") 
       <div class="reveal mb-14 max-w-3xl">
         <span class="section-label">01 // Familles</span>
         <h2 class="section-title mt-5">
-          Huit familles, <span class="text-gold">très inégales</span>
+          Huit familles, <span class="text-gold">de l'entreprise au CERT</span>
         </h2>
+        {/* L'énumération est le message de la page : on annonce ce qui existe.
+            Les effectifs sont lus dans familyCounts, jamais écrits à la main. */}
         <p class="mt-5 max-w-2xl text-lg leading-relaxed text-white/60">
-          Le référentiel distingue huit types d'acteurs. Les entreprises en absorbent
-          {" "}{Math.round((maxFamily / coverage.classified) * 100)}&nbsp;%, quand les structures
-          d'accompagnement et les associations tiennent à elles deux dans un effectif à un
-          chiffre.
+          {familyCounts.map((f, i) => (
+            <>
+              {i > 0 && (i === familyCounts.length - 1 ? " et " : ", ")}
+              <strong class="font-semibold text-white/85">{nf.format(f.count)}</strong>
+              {" "}{LIBELLES[f.slug]}
+            </>
+          ))}.
         </p>
       </div>
 
@@ -320,13 +329,11 @@ const reunionRank = countryCounts.findIndex((c) => c.country === "La Réunion") 
       <div class="reveal mb-14 max-w-3xl">
         <span class="section-label">02 // Territoire</span>
         <h2 class="section-title mt-5">
-          Treize pays, <span class="text-gold">aucun centre</span>
+          Treize pays, <span class="text-gold">un même bassin</span>
         </h2>
         <p class="mt-5 max-w-2xl text-lg leading-relaxed text-white/60">
-          Le classement porte sur les {nf.format(withCountry)} fiches dont le pays est
-          renseigné. En tête, {leader.country} pèse {leaderShareLocated}&nbsp;% : aucun pays
-          n'atteint le quart du bassin, et l'écart entre le premier et le sixième tient en
-          {" "}{leader.count - countryCounts[5].count} acteurs.
+          {nf.format(withCountry)} acteurs sont rattachés à un pays. De l'Afrique du Sud à
+          l'Australie, voici leur répartition.
         </p>
       </div>
 
@@ -373,19 +380,13 @@ const reunionRank = countryCounts.findIndex((c) => c.country === "La Réunion") 
                 pixel sur fond marine et le texte se lit mal. Le bloc repasse sur
                 la display de la charte, comme les titres de section. */}
             <blockquote class="font-display text-2xl font-medium leading-snug tracking-[-0.015em] text-white sm:text-3xl">
-              La&nbsp;Réunion arrive {reunionRank}<sup class="text-base">e</sup>. Le poids du bassin
-              est sur ses rives continentales, pas dans ses îles.
+              Chacun des {coverage.countries} pays du bassin compte des acteurs recensés — de
+              l'Afrique du Sud à l'Australie, des Maldives au Mozambique.
             </blockquote>
             <figcaption class="mt-7 border-t border-white/[0.08] pt-5 text-sm leading-relaxed text-white/55">
               <p>
-                {topThree.map((c) => c.country).join(", ")} totalisent {topThreeCount} acteurs,
-                contre {islandsCount} pour l'ensemble des îles du bassin —&nbsp;Mascareignes,
-                Sri&nbsp;Lanka et Maldives réunies.
-              </p>
-              <p class="mt-4">
-                C'est ce qui fixe le cadrage de la carte : la réduire aux Mascareignes en
-                sortirait {outsideIslandsShare}&nbsp;% des acteurs situés. Elle va donc de
-                l'Afrique du Sud à l'Australie.
+                La carte du haut de page va de l'Afrique du Sud à l'Australie pour couvrir
+                l'ensemble du bassin.
               </p>
               <p class="mt-4">
                 {coverage.withoutCountry} fiches n'ont pas d'adresse exploitable : elles comptent
