@@ -186,7 +186,13 @@ const CONTRACT = `<!--
               >
                 <div class="flex items-baseline justify-between gap-4 border-b border-white/[0.08] p-6">
                   <div class="min-w-0">
-                    <h2 class="truncate font-display text-lg font-semibold text-white">
+                    {/* `tabindex="-1"` : le titre n'entre pas dans le parcours
+                        clavier, mais peut recevoir le focus à l'ouverture pour
+                        que la lecture enchaîne lieu, effectif, puis liste. */}
+                    <h2
+                      tabindex="-1"
+                      class="truncate font-display text-lg font-semibold text-white outline-none"
+                    >
                       {lieu(p)}
                     </h2>
                     <p class="meta mt-1 truncate text-white/55">{p.country || "Sans pays"}</p>
@@ -206,6 +212,17 @@ const CONTRACT = `<!--
                         <div class="min-w-0 flex-1">
                           <p class="font-display text-sm font-semibold leading-snug text-white">
                             {a.name}
+                            {/* La mention est écrite, pas seulement grisée : un
+                                acteur atténué sans libellé se lit comme une
+                                erreur d'affichage, et l'opacité seule ne dit
+                                rien à un lecteur d'écran. */}
+                            <span
+                              data-mention
+                              hidden
+                              class="meta ml-2 align-middle text-[0.65rem] text-white/45"
+                            >
+                              hors filtre
+                            </span>
                           </p>
                           <p class="meta mt-1 truncate text-white/50">
                             {a.fams
@@ -251,6 +268,216 @@ const CONTRACT = `<!--
 
   <Footer />
 </Layout>
+
+<script>
+  /**
+   * État de la carte de travail.
+   *
+   * Deux axes, ceux de l'annuaire, amputés de la recherche plein texte : la
+   * carte n'est pas un second moteur. Le contrat d'URL est repris tel quel pour
+   * qu'un lien passe d'un écran à l'autre sans traduction — `famille` porte un
+   * slug, `pays` porte le **libellé brut accentué**, parce que `countryFacets`
+   * pose `slug: c.country`. Écrire `?pays=maurice` en minuscules serait rejeté
+   * par la validation, ici comme dans l'annuaire.
+   */
+  const etat: { famille: string | null; pays: string | null } = {
+    famille: null,
+    pays: null,
+  };
+
+  const carte = document.querySelector<HTMLElement>("[data-carte]");
+  const foyers = Array.from(document.querySelectorAll<SVGGElement>(".node[role='button']"));
+  const boutons = Array.from(document.querySelectorAll<HTMLElement>("[data-facet]"));
+  const hote = document.querySelector<HTMLElement>("[data-panneau-hote]");
+  const invite = document.querySelector<HTMLElement>("#panneau-invite");
+  const panneaux = Array.from(document.querySelectorAll<HTMLElement>("[data-panneau]"));
+  const vide = document.querySelector<HTMLElement>("#vide");
+  const videCause = document.querySelector<HTMLElement>("#vide-cause");
+  const versAnnuaire = document.querySelector<HTMLAnchorElement>("#vers-annuaire");
+
+  if (carte && hote && versAnnuaire) {
+    /** Foyer ouvert, ou `null`. C'est un état d'écran : jamais dans l'URL, car
+        l'identifiant d'un foyer est un centroïde recalculé à chaque export. */
+    let ouvert: number | null = null;
+
+    const libelle = (axe: string, valeur: string) => {
+      const b = boutons.find((x) => x.dataset.facet === axe && (x.dataset.value ?? "") === valeur);
+      return b?.querySelector("span:not(.facet-dot):not([data-count])")?.textContent?.trim() ?? valeur;
+    };
+
+    /* ------------------------------------------------------------------ URL */
+
+    function ecrireUrl() {
+      const p = new URLSearchParams();
+      if (etat.famille !== null) p.set("famille", etat.famille);
+      if (etat.pays !== null) p.set("pays", etat.pays);
+      const suffixe = p.toString();
+      history.replaceState(null, "", suffixe ? `?${suffixe}` : location.pathname);
+    }
+
+    function lireUrl() {
+      const p = new URLSearchParams(location.search);
+      etat.famille = p.has("famille") ? p.get("famille") : null;
+      etat.pays = p.has("pays") ? p.get("pays") : null;
+      // Une valeur inconnue ne doit pas éteindre la carte en silence : elle est
+      // ignorée, comme le fait déjà l'annuaire.
+      for (const axe of ["famille", "pays"] as const) {
+        const v = etat[axe];
+        if (v !== null && !boutons.some((b) => b.dataset.facet === axe && (b.dataset.value ?? "") === v)) {
+          etat[axe] = null;
+        }
+      }
+    }
+
+    function refletFacettes() {
+      for (const b of boutons) {
+        const axe = b.dataset.facet as "famille" | "pays";
+        b.setAttribute("aria-pressed", String(etat[axe] === (b.dataset.value ?? "")));
+      }
+    }
+
+    /* -------------------------------------------------------------- filtrage */
+
+    const passe = (fams: string, pays: string) =>
+      (etat.famille === null || fams.split(" ").includes(etat.famille)) &&
+      (etat.pays === null || pays === etat.pays);
+
+    /**
+     * Marque les lignes du panneau ouvert que le filtre courant exclut.
+     *
+     * Appelé depuis `appliquer()` et non depuis le seul gestionnaire de clic :
+     * si l'utilisateur change de filtre panneau ouvert, un marquage figé
+     * ferait mentir l'écran.
+     */
+    function refletPanneau() {
+      if (ouvert === null) return;
+      const actif = etat.famille !== null || etat.pays !== null;
+      for (const li of panneaux[ouvert].querySelectorAll<HTMLElement>("[data-acteur]")) {
+        const hors = actif && !passe(li.dataset.f ?? "", li.dataset.c ?? "");
+        li.toggleAttribute("data-hors-filtre", hors);
+        li.querySelector("[data-mention]")?.toggleAttribute("hidden", !hors);
+      }
+    }
+
+    function appliquer() {
+      let visibles = 0;
+      for (const foyer of foyers) {
+        const ok = passe(foyer.dataset.fams ?? "", foyer.dataset.country ?? "");
+        foyer.toggleAttribute("data-eteint", !ok);
+        if (ok) visibles++;
+      }
+
+      const actif = etat.famille !== null || etat.pays !== null;
+      carte.toggleAttribute("data-carte-filtre", actif);
+
+      // Zéro foyer retenu : nommer la contrainte plutôt que laisser une carte
+      // éteinte sans explication.
+      if (vide && videCause) {
+        vide.classList.toggle("hidden", visibles > 0);
+        if (visibles === 0) {
+          const parts: string[] = [];
+          if (etat.famille !== null) parts.push(libelle("famille", etat.famille));
+          if (etat.pays !== null) parts.push(libelle("pays", etat.pays));
+          videCause.textContent =
+            parts.length > 1
+              ? `Aucun foyer ne réunit ${parts[0]} et ${parts[1]}.`
+              : `Aucun foyer géolocalisé pour ${parts[0]}.`;
+        }
+      }
+
+      // Le pont d'état : le bouton emporte le filtre courant vers l'annuaire.
+      const p = new URLSearchParams();
+      if (etat.famille !== null) p.set("famille", etat.famille);
+      if (etat.pays !== null) p.set("pays", etat.pays);
+      const base = versAnnuaire.dataset.base ?? versAnnuaire.getAttribute("href") ?? "";
+      versAnnuaire.dataset.base = base;
+      versAnnuaire.href = p.toString() ? `${base}?${p}` : base;
+
+      refletFacettes();
+      refletPanneau();
+      ecrireUrl();
+    }
+
+    /* -------------------------------------------------------------- panneau */
+
+    function fermer(rendreFocus = false) {
+      if (ouvert === null) return;
+      panneaux[ouvert].hidden = true;
+      foyers.forEach((f) => f.removeAttribute("data-actif"));
+      const precedent = foyers.find((f) => Number(f.dataset.idx) === ouvert);
+      ouvert = null;
+      invite?.removeAttribute("hidden");
+      hote.removeAttribute("data-ouvert");
+      if (rendreFocus) precedent?.focus();
+    }
+
+    function ouvrir(foyer: SVGGElement) {
+      const idx = Number(foyer.dataset.idx);
+      if (Number.isNaN(idx) || !panneaux[idx]) return;
+      if (ouvert !== null) panneaux[ouvert].hidden = true;
+
+      foyers.forEach((f) => f.removeAttribute("data-actif"));
+      foyer.setAttribute("data-actif", "");
+      invite?.setAttribute("hidden", "");
+      panneaux[idx].hidden = false;
+      hote.setAttribute("data-ouvert", "");
+      ouvert = idx;
+
+      refletPanneau();
+      // Le focus part sur le titre : le lecteur d'écran enchaîne lieu, effectif
+      // puis liste, au lieu de reprendre au début du document.
+      panneaux[idx].querySelector<HTMLElement>("h2")?.focus();
+    }
+
+    /* -------------------------------------------------------------- écoutes */
+
+    for (const b of boutons) {
+      b.addEventListener("click", () => {
+        const axe = b.dataset.facet as "famille" | "pays";
+        const v = b.dataset.value ?? "";
+        // Second clic sur la même facette : relâchement. Sans ça, un filtre posé
+        // par erreur ne se retire qu'en passant par « Réinitialiser ».
+        etat[axe] = etat[axe] === v ? null : v;
+        appliquer();
+      });
+    }
+
+    for (const reset of document.querySelectorAll("#reinitialiser, [data-reset]")) {
+      reset.addEventListener("click", () => {
+        etat.famille = null;
+        etat.pays = null;
+        appliquer();
+      });
+    }
+
+    const nodes = document.querySelector(".nodes");
+    nodes?.addEventListener("click", (e) => {
+      const foyer = (e.target as Element).closest<SVGGElement>(".node[role='button']");
+      if (foyer) ouvrir(foyer);
+    });
+    nodes?.addEventListener("keydown", (e) => {
+      const ev = e as KeyboardEvent;
+      if (ev.key !== "Enter" && ev.key !== " ") return;
+      const foyer = (ev.target as Element).closest<SVGGElement>(".node[role='button']");
+      if (!foyer) return;
+      // Sans ça, l'Espace fait défiler la page sous le panneau qui s'ouvre.
+      ev.preventDefault();
+      ouvrir(foyer);
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if ((e as KeyboardEvent).key === "Escape") fermer(true);
+    });
+
+    window.addEventListener("popstate", () => {
+      lireUrl();
+      appliquer();
+    });
+
+    lireUrl();
+    appliquer();
+  }
+</script>
 
 <style>
   /* La carte occupe son cadre : c'est l'instrument de la page, pas une

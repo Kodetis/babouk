@@ -8,13 +8,21 @@ import { asset, home } from "../lib/url.js";
  */
 const annuaire = asset("annuaire/");
 const links = [
+  { label: "Carte", href: asset("carte/") },
   { label: "Annuaire", href: annuaire },
   { label: "Familles", href: `${home}#familles` },
   { label: "Territoire", href: `${home}#territoire` },
 ];
 
-/** L'annuaire ne se signale pas comme une destination depuis lui-même. */
-const surAnnuaire = Astro.url.pathname.replace(/\/$/, "") === annuaire.replace(/\/$/, "");
+/**
+ * Une page ne se signale pas comme une destination depuis elle-même.
+ *
+ * Comparaison générale sur le chemin plutôt qu'un booléen par page : depuis
+ * qu'il y a deux pages pleines — l'annuaire et la carte — dupliquer le test
+ * garantissait d'en oublier une à la troisième.
+ */
+const chemin = Astro.url.pathname.replace(/\/$/, "");
+const courante = (href: string) => chemin === href.replace(/\/$/, "");
 ---
 
 <nav
@@ -35,10 +43,10 @@ const surAnnuaire = Astro.url.pathname.replace(/\/$/, "") === annuaire.replace(/
       {links.map((link) => (
         <a
           href={link.href}
-          aria-current={surAnnuaire && link.href === annuaire ? "page" : undefined}
+          aria-current={courante(link.href) ? "page" : undefined}
           class:list={[
             "font-display text-xs font-medium uppercase tracking-[0.12em] transition-colors hover:text-gold",
-            surAnnuaire && link.href === annuaire ? "text-gold" : "text-white/70",
+            courante(link.href) ? "text-gold" : "text-white/70",
           ]}
         >
           {link.label}
@@ -67,10 +75,10 @@ const surAnnuaire = Astro.url.pathname.replace(/\/$/, "") === annuaire.replace(/
       {links.map((link) => (
         <a
           href={link.href}
-          aria-current={surAnnuaire && link.href === annuaire ? "page" : undefined}
+          aria-current={courante(link.href) ? "page" : undefined}
           class:list={[
             "font-display text-sm font-medium uppercase tracking-[0.12em] transition-colors hover:text-gold",
-            surAnnuaire && link.href === annuaire ? "text-gold" : "text-white/70",
+            courante(link.href) ? "text-gold" : "text-white/70",
           ]}
         >
           {link.label}
