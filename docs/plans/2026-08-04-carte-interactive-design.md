@@ -1,6 +1,7 @@
 # Carte interactive — design
 
-> Branche `feat/carte-interactive`. Rédigé le 2026-08-04.
+> Branche `feat/carte-interactive`. Rédigé le 2026-08-04, révisé le même jour
+> après relecture adverse. Les corrections sont notées en fin de document.
 
 ## Le problème
 
@@ -17,84 +18,102 @@ ni comparaison.
 - **Pas de fond de tuiles.** Ni OpenStreetMap ni équivalent : aucune valeur
   ajoutée pour placer 55 foyers, et une dépendance externe sur un livrable qui
   se veut autonome.
-- **Pas de zoom ni de pan libres.** 71 % des acteurs géolocalisés partagent
+- **Pas de zoom, sous aucune forme.** 71 % des acteurs géolocalisés partagent
   leurs coordonnées exactes avec un autre — ce sont des centroïdes de ville,
   33 fiches au même point à Port-Louis. Le zoom promet une séparation que la
-  donnée ne peut pas tenir.
+  donnée ne peut pas tenir. Cela vaut aussi pour un recadrage par région, qui
+  est un zoom à positions fixes : écarté.
 - **Pas de relations entre acteurs.** Les arcs décoratifs restent sur la
   landing, assumés comme tels ; ils n'ont rien à faire ici.
-- **Pas de second moteur de recherche.** L'annuaire reste la liste ; la carte
-  est une entrée géographique vers elle.
+- **Pas de second moteur de recherche.** Pas de champ texte : la recherche
+  plein texte reste dans l'annuaire. La carte n'a que deux filtres.
 
 ## Architecture
 
 Une page, `/carte`, rendue au build comme le reste du site. Trois surfaces :
 
-1. **La carte** — le composant `MapOceanIndien` existant, en mode interactif
+1. **La carte** — le composant `MapOceanIndien`, en mode interactif
 2. **Le panneau** — la liste des acteurs du foyer sélectionné
-3. **La barre de filtres** — famille, pays, vue régionale
+3. **Deux filtres** — famille et pays
 
 Aucun appel réseau après le premier chargement, comme l'annuaire.
 
 ## Données
 
-`mapPoints` gagne le champ qui lui manque : chaque foyer porte les acteurs
-qu'il contient.
+`mapPoints` gagne deux champs. Le premier est l'identité qui manque, le second
+corrige une approximation du mécanisme de filtrage.
 
-    { x, y, n, c, f, country, actors: [{ name, fams, city, web }] }
+    {
+      x, y, n, c, country,
+      f,          // famille dominante — sert la COULEUR du disque
+      fams,       // toutes les familles présentes, séparées par un espace
+      actors: [{ name, fams, city, web }],
+    }
 
-572 entrées, 49 Ko de JSON brut, **13 Ko gzippés** — à comparer aux 1,6 Mo que
-pèse déjà la page annuaire. Le panneau n'interroge rien : tout est dans la
-page au chargement.
+`fams` est indispensable et n'existe pas aujourd'hui. Le mécanisme actuel
+n'expose que `f`, la famille **dominante** (`data.js`, sélection du `dominant`
+par effectif). Or 34 des 55 foyers contiennent plusieurs acteurs : filtrer sur
+la dominante éteindrait un foyer contenant un CERT au motif qu'il est
+majoritairement composé d'entreprises. `fams` reprend exactement la convention
+de `data-f` dans l'annuaire.
 
-## Recadrage par région
+Charge utile : 569 acteurs, 49 Ko de JSON brut, **13 Ko gzippés** — à comparer
+aux 1,6 Mo que pèse déjà la page annuaire. Le panneau n'interroge rien.
 
-Cinq vues : **tout le bassin** (défaut), Afrique de l'Est, Mascareignes,
-Inde & Sri Lanka, Australie.
+## Filtres
 
-Point technique qui commande l'implémentation : **l'attribut `viewBox` ne se
-transitionne pas en CSS.** Le recadrage passe donc par un `transform`
-translate + scale posé sur un groupe englobant, animé en CSS. C'est composité
-par le GPU, et la projection du SVG reste intacte — aucun point n'est
-reprojeté.
+Deux axes, **avec les valeurs exactes de l'annuaire** :
 
-`src/lib/vues.js` traduit des bornes géographiques en transform, avec la même
-projection que le reste. Les bornes sont écrites une fois, jamais les
-transforms.
+| Axe | Valeurs | Source |
+| :--- | :--- | :--- |
+| `famille` | 9 slugs, `sans-famille` compris | `familyFacets` |
+| `pays` | 14 valeurs, libellés bruts accentués (`Maurice`, `La Réunion`) plus la chaîne vide pour « Sans pays » | `countryFacets` |
+
+Les valeurs de pays ne sont **pas** des slugs : `countryFacets` pose
+`slug: c.country`. Un lien `?pays=maurice` serait rejeté par la validation de
+`lireUrl()`, qui compare strictement. La carte doit écrire `?pays=Maurice`.
+
+Un foyer dont aucun acteur ne passe le filtre tombe à 12 % d'opacité plutôt que
+de disparaître : la géographie du bassin reste lisible. Le test porte sur
+`fams` et sur `country`, jamais sur la dominante.
+
+Le filtre pays n'est pas redondant avec le clic sur un foyer : un pays contient
+souvent plusieurs foyers — trois pour l'Australie parmi les plus gros, deux pour
+l'Inde.
+
+**Garde au build.** `country` d'un foyer est le pays du premier acteur inséré
+dans la cellule. Aucune cellule ne mélange aujourd'hui deux pays, mais rien ne
+l'empêche à un réexport près. Une assertion au build échoue si une cellule
+devient mixte, plutôt que de filtrer en silence sur une valeur arbitraire.
 
 ## Le panneau
 
 Au clic sur un foyer : le lieu, l'effectif, puis la liste des acteurs. Chaque
-ligne porte la pastille de sa famille, le nom, la ville et un lien vers le
-site quand il existe.
+ligne porte la pastille de sa famille, le nom, la ville et un lien vers le site
+quand il existe. Le panneau liste **tous** les acteurs du foyer, y compris
+ceux que le filtre courant exclut, signalés comme tels — un foyer ouvert est
+une question sur un lieu, pas sur un filtre.
 
-En pied de panneau, en permanence : **115 acteurs sans coordonnées**, qui
-renvoie vers l'annuaire. Ils comptent dans le total de 685 et n'apparaissent
-sur aucune carte — les masquer serait le seul vrai mensonge possible sur une
-page qui s'appelle « carte ».
+En pied de panneau, en permanence : **116 acteurs ne sont pas sur la carte** —
+115 sans coordonnées et 1 hors cadre — avec un lien vers l'annuaire. Le chiffre
+est lu dans `coverage`, jamais écrit à la main.
 
 Sous `lg`, le panneau devient une feuille ancrée en bas d'écran.
 
-## Filtres
-
-Famille (8) et pays (13), mêmes slugs que l'annuaire. Un foyer dont aucun
-acteur ne passe le filtre tombe à 12 % d'opacité plutôt que de disparaître :
-la géographie du bassin reste lisible.
-
-Le mécanisme existe déjà pour les familles — `data-isolate` posé sur un
-ancêtre, tout le rendu en CSS, aucune classe écrite sur les 55 foyers. On
-l'étend au pays sans changer le principe.
-
 ## URL
 
-    /carte/?famille=cert&pays=maurice&vue=mascareignes&foyer=452:318
+    /carte/?famille=cert&pays=Maurice
 
-Même contrat que l'annuaire pour `famille` et `pays`, augmenté de `vue` et
-`foyer`. Une valeur inconnue est ignorée au lieu de vider l'écran, comme le
-fait déjà `lireUrl()` dans l'annuaire.
+Deux paramètres, ceux de l'annuaire, avec ses valeurs. Une valeur inconnue est
+ignorée au lieu de vider l'écran, comme le fait déjà `lireUrl()`.
 
-Conséquence utile : `/carte/?famille=cert` est un lien partageable, et le
-bouton « voir dans l'annuaire » transporte l'état d'un écran à l'autre.
+**Pas de paramètre `foyer`.** L'identifiant d'un foyer serait ses coordonnées
+projetées, arrondies au dixième et recalculées à chaque export : un acteur
+ajouté dans la cellule déplace le centroïde et casse tout lien partagé, en
+silence. La sélection d'un foyer reste un état d'écran, pas un état d'URL.
+
+Conséquence utile : `/carte/?famille=cert` est partageable, et le bouton « voir
+dans l'annuaire » transporte l'état d'un écran à l'autre.
 
 ## Les trois clics
 
@@ -108,33 +127,68 @@ C'est le critère de réussite, et il se vérifie au navigateur.
 
 ## Accessibilité
 
-- Chaque foyer est un `<button>` focusable, ordre de tabulation par effectif
-  décroissant — le plus gros d'abord, pas le plus à l'ouest.
-- Les vues sont des `<button>`, jamais un geste : la carte reste utilisable
-  sans souris et sans doigt.
-- Le panneau est une région annoncée à chaque changement de sélection.
-- Tant qu'aucun foyer n'est sélectionné, la carte garde son `role="img"` et
-  son résumé textuel.
+- Un foyer est un `<g role="button" tabindex="0">`, pas un `<button>` HTML :
+  ce dernier n'est pas un enfant valide d'un `<g>` SVG.
+- En mode interactif, la carte **abandonne** `role="img"`. Ce rôle rend ses
+  descendants présentationnels : les foyers ne seraient jamais atteignables au
+  clavier. La carte devient un `role="group"` avec son résumé en
+  `aria-describedby`. Le mode non interactif de la landing garde `role="img"`.
+- **L'ordre de tabulation suit l'ordre du DOM**, c'est-à-dire l'effectif
+  croissant. En SVG, l'ordre du DOM commande à la fois la peinture et le focus :
+  les petits foyers doivent être peints en dernier pour rester cliquables sous
+  les gros disques, qui atteignent 19 unités de rayon quand deux cellules
+  voisines n'en sont séparées que de 4,8. On ne peut pas avoir les gros d'abord
+  au clavier et les petits au-dessus à l'écran ; les petits au-dessus gagne,
+  parce qu'un foyer recouvert est un foyer inaccessible à la souris.
+- Les filtres sont des `<button>`, jamais un geste.
 
 ## Découpage
 
 | Unité | Rôle |
 | :--- | :--- |
-| `src/lib/data.js` | ajouter `actors` à `mapPoints` |
-| `src/lib/vues.js` | les cinq cadrages, bornes géographiques → transform |
-| `src/components/MapOceanIndien.astro` | mode interactif, groupe de recadrage |
-| `src/pages/carte.astro` | page, barre de filtres, panneau |
+| `src/lib/data.js` | ajouter `fams` et `actors` à `mapPoints` ; assertion de cellule mono-pays |
+| `src/components/MapOceanIndien.astro` | prop `interactif` : foyers focusables, `fams` en attribut, rôle ARIA conditionnel |
+| `src/pages/carte.astro` | page, filtres, panneau, lecture et écriture de l'URL |
 
-Le composant de carte est partagé avec la landing : le mode interactif est une
-prop, pas une copie. La landing continue de l'appeler sans.
+Le composant de carte reste partagé avec la landing : le mode interactif est
+une prop, pas une copie du fichier. La landing continue de l'appeler sans — ce
+qui compte, puisque l'animation des flux viendra modifier sa version.
 
 ## Vérification
 
 - Le scénario des trois clics, exécuté au navigateur, du premier écran à la
   fiche.
-- Chaque vue recadre sans couper un foyer de sa région.
+- Un foyer à dominante Entreprises contenant un CERT reste allumé sous
+  `famille=cert`. C'est le test qui distingue `fams` de `f`.
+- Un lien `?pays=Maurice` sélectionne la facette ; `?pays=maurice` est ignoré
+  sans vider l'écran.
 - Un filtre sans résultat affiche un état vide explicite, jamais une carte
   éteinte sans explication.
 - Parcours au clavier seul : atteindre un foyer, ouvrir le panneau, le lire.
-- Le total du panneau plus les 115 sans coordonnées égale 685, quel que soit
-  le filtre actif.
+- `coverage.onMap + coverage.unlocated + coverage.offFrame === coverage.total`,
+  soit 569 + 115 + 1 = 685. Vérifié sur les valeurs calculées, pas écrites.
+
+## Corrections après relecture
+
+La première version affirmait quatre choses fausses, toutes vérifiées contre le
+code :
+
+1. **`pays=maurice`** — les valeurs de pays de l'annuaire sont les libellés
+   bruts, pas des slugs. Le pont carte↔annuaire cassait.
+2. **« famille (8), pays (13) »** — l'annuaire expose 9 et 14 facettes,
+   `sans-famille` et « Sans pays » comprises.
+3. **« on étend `data-isolate` sans changer le principe »** — le mécanisme
+   filtre sur la famille dominante. La sémantique promise imposait un nouvel
+   attribut, donc une réécriture, pas une extension.
+4. **« 572 entrées », critère `572 + 115 = 685`** — la carte porte 569 acteurs ;
+   l'acteur hors cadre était oublié, et le critère inatteignable.
+
+Deux éléments ont été supprimés comme sur-ingénierie :
+
+- **Les cinq vues régionales** et `src/lib/vues.js`. C'était le plus gros
+  morceau technique du document, et il ne traitait pas sa propre conséquence :
+  à un facteur de 4 à 6, le recadrage multiplie les rayons, les épaisseurs de
+  trait, les halos et les longueurs de tirets des arcs. Le filtre pays rend le
+  service attendu.
+- **Le paramètre `foyer=`** dans l'URL, dont l'identifiant n'aurait survécu à
+  aucun réexport.
