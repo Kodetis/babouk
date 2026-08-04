@@ -17,7 +17,7 @@ const page = await browser.newPage({
   locale: "fr-FR",
 });
 
-await page.goto("http://localhost:4321/carte/", { waitUntil: "networkidle" });
+await page.goto("http://localhost:4321/", { waitUntil: "networkidle" });
 await page.evaluate(() => document.fonts.ready);
 await page.evaluate(() =>
   document
