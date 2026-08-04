@@ -18,11 +18,9 @@ ni comparaison.
 - **Pas de fond de tuiles.** Ni OpenStreetMap ni équivalent : aucune valeur
   ajoutée pour placer 55 foyers, et une dépendance externe sur un livrable qui
   se veut autonome.
-- **Pas de zoom, sous aucune forme.** 71 % des acteurs géolocalisés partagent
-  leurs coordonnées exactes avec un autre — ce sont des centroïdes de ville,
-  33 fiches au même point à Port-Louis. Le zoom promet une séparation que la
-  donnée ne peut pas tenir. Cela vaut aussi pour un recadrage par région, qui
-  est un zoom à positions fixes : écarté.
+- **Pas de zoom libre, pas de pan.** Molette et glisser demandent un moteur à
+  écrire et à régler au doigt, pour un gain nul ici : le recadrage par pays
+  couvre le besoin et reste utilisable au clavier.
 - **Pas de relations entre acteurs.** Les arcs décoratifs restent sur la
   landing, assumés comme tels ; ils n'ont rien à faire ici.
 - **Pas de second moteur de recherche.** Pas de champ texte : la recherche
@@ -38,7 +36,50 @@ Une page, `/carte`, rendue au build comme le reste du site. Trois surfaces :
 
 Aucun appel réseau après le premier chargement, comme l'annuaire.
 
-## Données
+## Recadrage par pays
+
+Cliquer un pays recadre la carte dessus. Le zoom suit le filtre au lieu d'être
+un contrôle de plus : désigner Maurice et voir Maurice sont le même geste.
+
+Le `viewBox` ne se transitionne pas en CSS. Le cadrage est donc une translation
+et une échelle posées sur un groupe englobant, animées en CSS. La contrepartie
+est réelle : l'échelle multiplie tout ce que le groupe contient. Les traits de
+côte et le graticule en sortent par `vector-effect="non-scaling-stroke"` ; les
+foyers par une contre-échelle de `1/k` autour de leur propre centre — position
+zoomée, taille constante. Le découpage est porté par le groupe de cadrage et
+non par les terres : appliqué là, il s'exerce dans le repère non transformé,
+donc sur le cadre visible.
+
+Facteurs de ×2,7 pour l'Inde à ×37 pour les îles. Un pays sans foyer
+géolocalisé n'a pas de cadrage : on reste au bassin plutôt que de zoomer sur du
+vide.
+
+## Données : deux résolutions
+
+Une seule grille d'agrégation ne peut pas servir les deux échelles de lecture,
+et c'est la découverte qui a fait rouvrir le sujet du zoom.
+
+Au demi-degré, La Réunion — 0,47° sur 0,49° — tient dans une cellule : ses 45
+acteurs, qui portent **43 coordonnées distinctes réparties sur 19 communes**,
+s'écrasaient en 3 disques. La statistique globale des « 71 % d'acteurs partageant
+leurs coordonnées exactes » est vraie, mais tirée par l'Inde et Maurice ; elle
+ne dit rien de La Réunion, et s'en servir pour refuser le zoom était une erreur.
+
+Deux jeux sont donc calculés au build :
+
+| | grille | foyers | La Réunion |
+| :--- | :--- | ---: | ---: |
+| `mapPoints` | 0,5° | 55 | 3 |
+| `mapPointsFins` | 0,01° | 168 | 30 |
+
+La page montre le premier au bassin — 168 disques s'y chevaucheraient en pâté —
+et bascule sur le second dès qu'un pays est cadré, où la place existe pour les
+séparer. Les clés de foyer et de panneau sont préfixées par le niveau.
+
+La page pèse 1,4 Mo, du même ordre que l'annuaire. C'est assumé : les deux jeux
+de panneaux sont prérendus, le client ne fait que montrer et masquer.
+
+## Données : identité des foyers
 
 `mapPoints` gagne deux champs. Le premier est l'identité qui manque, le second
 corrige une approximation du mécanisme de filtrage.
@@ -192,10 +233,25 @@ code :
 
 Deux éléments ont été supprimés comme sur-ingénierie :
 
-- **Les cinq vues régionales** et `src/lib/vues.js`. C'était le plus gros
-  morceau technique du document, et il ne traitait pas sa propre conséquence :
-  à un facteur de 4 à 6, le recadrage multiplie les rayons, les épaisseurs de
-  trait, les halos et les longueurs de tirets des arcs. Le filtre pays rend le
-  service attendu.
+- **Les cinq vues régionales fixes**, remplacées depuis par un recadrage qui
+  suit le filtre pays — voir ci-dessous.
 - **Le paramètre `foyer=`** dans l'URL, dont l'identifiant n'aurait survécu à
-  aucun réexport.
+  aucun réexport. Toujours écarté.
+
+## Ce qui a été rouvert après coup
+
+Le document écartait le zoom en s'appuyant sur les « 71 % d'acteurs partageant
+leurs coordonnées exactes ». L'argument ne tenait pas pour les îles, et le
+raisonnement confondait deux problèmes.
+
+La vraie cause de l'illisibilité de La Réunion n'était pas l'absence de zoom
+mais la grille d'agrégation, jamais questionnée. Une fois la grille fine
+ajoutée, le zoom devient utile puisqu'il révèle enfin quelque chose. Et le
+plafond d'échelle de 5, motivé par « au-delà la mer occupe tout et le repère
+disparaît », était faux : le fond de carte contient La Réunion — le polygone
+France en porte deux avec Mayotte — et à ×37 l'île remplit le cadre.
+
+Le recadrage a aussi cessé d'être un contrôle séparé pour devenir la
+conséquence du filtre pays, ce qui règle l'objection initiale : ce n'est plus
+un morceau technique en plus, c'est le comportement d'un clic qui existait
+déjà.
