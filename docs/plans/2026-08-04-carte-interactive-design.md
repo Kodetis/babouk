@@ -133,13 +133,20 @@ C'est le critère de réussite, et il se vérifie au navigateur.
   descendants présentationnels : les foyers ne seraient jamais atteignables au
   clavier. La carte devient un `role="group"` avec son résumé en
   `aria-describedby`. Le mode non interactif de la landing garde `role="img"`.
-- **L'ordre de tabulation suit l'ordre du DOM**, c'est-à-dire l'effectif
-  croissant. En SVG, l'ordre du DOM commande à la fois la peinture et le focus :
-  les petits foyers doivent être peints en dernier pour rester cliquables sous
-  les gros disques, qui atteignent 19 unités de rayon quand deux cellules
-  voisines n'en sont séparées que de 4,8. On ne peut pas avoir les gros d'abord
-  au clavier et les petits au-dessus à l'écran ; les petits au-dessus gagne,
-  parce qu'un foyer recouvert est un foyer inaccessible à la souris.
+- **`mapPoints` passe en tri décroissant**, et cela règle deux problèmes d'un
+  coup. En SVG, l'ordre du DOM commande à la fois la peinture et le focus, et
+  les éléments tardifs sont peints par-dessus les précédents.
+
+  Le tri actuel est croissant (`.sort((a, b) => a.n - b.n)`) : le foyer de 63
+  acteurs arrive en dernier et se peint **au-dessus** de ses voisins. Avec un
+  rayon de 19 unités quand deux cellules adjacentes n'en sont séparées que de
+  4,8, il en recouvre plusieurs — qui sont donc incliquables. C'est un défaut
+  actuel, visible aussi sur la landing.
+
+  En décroissant, les gros foyers passent en premier dans le DOM : peints
+  dessous, et atteints d'abord au clavier. Les petits finissent en dernier,
+  donc au-dessus et cliquables. Aucun arbitrage à faire, contrairement à ce
+  qu'affirmait la version précédente de ce document.
 - Les filtres sont des `<button>`, jamais un geste.
 
 ## Découpage
