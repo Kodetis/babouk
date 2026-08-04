@@ -156,10 +156,23 @@ const label =
     </linearGradient>
   </defs>
 
+  {/* La mer ne bouge pas : c'est un aplat, la recadrer ne montrerait rien de
+      plus et laisserait des vides aux bords pendant la transition. */}
   <rect width={VIEW_WIDTH} height={VIEW_HEIGHT} fill="var(--map-sea)" />
   <rect width={VIEW_WIDTH} height={VIEW_HEIGHT} fill="url(#sea-glow)" />
 
-  <g class="graticule" stroke="rgba(120,150,200,0.10)" stroke-width="1" fill="none">
+  {/* Groupe de cadrage. La page y pose `--k`, `--tx`, `--ty` ; la transition
+      est en CSS. Le découpage est porté ici plutôt que sur les terres : appliqué
+      au groupe, il s'exerce dans le repère non transformé, c'est-à-dire sur le
+      cadre visible — sinon le zoom emporterait la découpe avec lui. */}
+  <g class="cadre" clip-path="url(#map-frame)">
+  <g
+    class="graticule"
+    stroke="rgba(120,150,200,0.10)"
+    stroke-width="1"
+    fill="none"
+    vector-effect="non-scaling-stroke"
+  >
     {meridians.map((m) => <line x1={m.x} y1="0" x2={m.x} y2={VIEW_HEIGHT} />)}
     {parallels.map((p) => (
       <line
@@ -172,7 +185,7 @@ const label =
     ))}
   </g>
 
-  <g class="landmass" clip-path="url(#map-frame)">
+  <g class="landmass">
     {countries.map((c) => (
       <path
         d={c.d}
@@ -180,6 +193,10 @@ const label =
         stroke={c.inScope ? "var(--map-stroke-scope)" : "var(--map-stroke)"}
         stroke-width={c.inScope ? 1 : 0.75}
         stroke-linejoin="round"
+        {/* Le trait de côte garde son épaisseur quel que soit le cadrage. Sans
+            ça, un zoom ×5 le porterait à 5 px et l'Afrique deviendrait un
+            contour au feutre. */}
+        vector-effect="non-scaling-stroke"
       />
     ))}
   </g>
@@ -253,6 +270,7 @@ const label =
       </g>
     ))}
   </g>
+  </g>
 </svg>
 
 <style>
@@ -260,6 +278,39 @@ const label =
     width: 100%;
     height: 100%;
     display: block;
+  }
+
+  /* Cadrage. `--k`, `--tx`, `--ty` sont posés par la page ; à défaut, le bassin
+     entier. La transition porte sur le transform, composité, jamais sur le
+     viewBox qui ne s'anime pas. */
+  .cadre {
+    --k: 1;
+    --tx: 0;
+    --ty: 0;
+    transform: translate(calc(var(--tx) * 1px), calc(var(--ty) * 1px)) scale(var(--k));
+    transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Contre-échelle des foyers. Le groupe de cadrage multiplie tout ce qu'il
+     contient ; à ×5, un disque de 19 unités en ferait 95 et couvrirait un
+     quart de la carte. Chaque foyer annule donc l'échelle autour de son propre
+     centre — sa position suit le zoom, sa taille non. Les traits de côte et le
+     graticule s'en sortent par `vector-effect`, qui ne s'applique pas aux
+     rayons. */
+  .cadre .node {
+    transform: scale(calc(1 / var(--k)));
+    transform-box: fill-box;
+    transform-origin: center;
+    transition:
+      opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cadre,
+    .cadre .node {
+      transition: none;
+    }
   }
 
   /* Le tiret court parcourt l'arc : c'est le seul mouvement porteur de sens de

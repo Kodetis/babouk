@@ -10,9 +10,29 @@ import {
   countryFacets,
   coverage,
 } from "../lib/data.js";
+import { cadrages } from "../lib/vues.js";
 import { asset } from "../lib/url.js";
 
 const nf = new Intl.NumberFormat("fr-FR");
+
+/**
+ * Effectifs de foyers par axe, à ne pas confondre avec les effectifs d'acteurs
+ * des facettes.
+ *
+ * Une facette peut être vraie et ne rien allumer : « France 1 » compte un
+ * acteur du recensement, qui n'est pas géolocalisé dans le cadre, donc zéro
+ * foyer. Ces facettes sont marquées `facet--vide` — le style existe déjà pour
+ * l'annuaire — plutôt que retirées : elles restent cliquables et la page nomme
+ * alors ce qu'elle ne peut pas montrer.
+ */
+const foyersParFamille = new Map();
+const foyersParPays = new Map();
+for (const p of mapPoints) {
+  for (const s of p.fams.split(" ")) {
+    foyersParFamille.set(s, (foyersParFamille.get(s) ?? 0) + 1);
+  }
+  foyersParPays.set(p.country, (foyersParPays.get(p.country) ?? 0) + 1);
+}
 
 /** Slug -> couleur et libellé, pour les pastilles des lignes du panneau. La
     couleur ne porte jamais seule : chaque pastille est doublée de son libellé. */
@@ -98,7 +118,7 @@ const CONTRACT = `<!--
               {familyFacets.map((f) => (
                 <button
                   type="button"
-                  class="facet facet--chip"
+                  class:list={["facet facet--chip", !foyersParFamille.get(f.slug) && "facet--vide"]}
                   data-facet="famille"
                   data-value={f.slug}
                   aria-pressed="false"
@@ -120,10 +140,14 @@ const CONTRACT = `<!--
               {countryFacets.map((c) => (
                 <button
                   type="button"
-                  class="facet facet--chip facet--plain"
+                  class:list={[
+                    "facet facet--chip facet--plain",
+                    !foyersParPays.get(c.slug) && "facet--vide",
+                  ]}
                   data-facet="pays"
                   data-value={c.slug}
                   aria-pressed="false"
+                  data-cadrage={cadrages[c.slug] ? JSON.stringify(cadrages[c.slug]) : undefined}
                 >
                   <span class="text-sm">{c.label}</span>
                   <span class="readout text-xs text-white/60" data-count>{nf.format(c.count)}</span>
@@ -393,9 +417,35 @@ const CONTRACT = `<!--
       versAnnuaire.dataset.base = base;
       versAnnuaire.href = p.toString() ? `${base}?${p}` : base;
 
+      cadrer();
       refletFacettes();
       refletPanneau();
       ecrireUrl();
+    }
+
+    /**
+     * Recadrage sur le pays filtré.
+     *
+     * Le zoom suit le filtre au lieu d'être un contrôle de plus : cliquer
+     * « Maurice » désigne déjà une région, recadrer dessus est la conséquence
+     * de ce clic. Sans filtre pays, le bassin entier.
+     *
+     * Il ne sépare pas les acteurs co-localisés — ils partagent des centroïdes
+     * de ville, aucun zoom n'y changera rien. C'est le panneau qui répond à
+     * « qui est là » ; le recadrage ne fait que rendre la région lisible.
+     */
+    function cadrer() {
+      const g = document.querySelector<SVGGElement>(".cadre");
+      if (!g) return;
+      const b = etat.pays === null ? null : boutons.find(
+        (x) => x.dataset.facet === "pays" && (x.dataset.value ?? "") === etat.pays
+      );
+      // Un pays sans foyer géolocalisé n'a pas de cadrage : on reste au bassin
+      // entier plutôt que de zoomer sur du vide.
+      const c = b?.dataset.cadrage ? JSON.parse(b.dataset.cadrage) : { k: 1, tx: 0, ty: 0 };
+      g.style.setProperty("--k", String(c.k));
+      g.style.setProperty("--tx", String(c.tx));
+      g.style.setProperty("--ty", String(c.ty));
     }
 
     /* -------------------------------------------------------------- panneau */
