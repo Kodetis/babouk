@@ -93,6 +93,35 @@ export function fold(text) {
 const collator = new Intl.Collator("fr", { sensitivity: "base" });
 
 /**
+ * Code ISO 3166-1 alpha-2 par pays, pour le drapeau de l'annuaire.
+ *
+ * La correspondance est écrite ici plutôt que lue dans la colonne `pays_code` :
+ * l'export normalise déjà les treize pays en libellés canoniques, alors que le
+ * champ brut est parfois vide sur des fiches dont le pays, lui, est renseigné.
+ */
+const ISO = {
+  "Afrique du Sud": "ZA", Australie: "AU", France: "FR", Inde: "IN",
+  Kenya: "KE", Madagascar: "MG", Maldives: "MV", Maurice: "MU",
+  Mozambique: "MZ", "La Réunion": "RE", Seychelles: "SC",
+  "Sri Lanka": "LK", Tanzanie: "TZ",
+};
+
+/**
+ * Drapeau en indicateurs régionaux — deux points de code, aucun octet
+ * téléchargé, aucune image à charger pour 685 lignes.
+ *
+ * Windows n'embarque pas de glyphes de drapeau : le navigateur y affiche le
+ * code à deux lettres dans une pastille. C'est une dégradation lisible, pas un
+ * carré vide, et le pays est de toute façon écrit en toutes lettres sur la
+ * ligne juste en dessous — le drapeau n'est qu'une aide au balayage.
+ */
+function flagOf(country) {
+  const code = ISO[country];
+  if (!code) return "";
+  return String.fromCodePoint(...[...code].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
+}
+
+/**
  * Le jeu complet, une entrée par acteur, destiné à la page annuaire.
  *
  * Tout est sérialisé dans le HTML au build : les 685 fiches sont dans la page,
@@ -114,6 +143,7 @@ export const directory = raw
       name: r.nom,
       families,
       country: r.pays,
+      flag: flagOf(r.pays),
       city: r.ville,
       domaines,
       specialites,

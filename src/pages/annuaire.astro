@@ -266,6 +266,11 @@ const CONTRACT = `<!--
 
                   <span class="min-w-0 flex-1">
                     <span class="block font-display text-base font-semibold leading-snug text-white">
+                      {/* Aide au balayage, pas une information : le pays est
+                          écrit en toutes lettres sur la ligne du dessous, donc
+                          le drapeau est retiré de l'arbre d'accessibilité pour
+                          ne pas faire annoncer deux fois la même chose. */}
+                      {a.flag && <span class="mr-2 inline-block" aria-hidden="true">{a.flag}</span>}
                       {a.name}
                     </span>
                     <span class="meta mt-1.5 block truncate text-white/55">
