@@ -29,9 +29,26 @@ interface Props {
    * lumineux sur toute la largeur.
    */
   scrim?: boolean;
+  /**
+   * Mode carte de travail : les foyers deviennent atteignables au clavier et
+   * exposent de quoi être filtrés et reliés à un panneau.
+   *
+   * C'est une prop et non un second fichier : la landing et `/carte` doivent
+   * partager la même géographie, la même projection et les mêmes foyers. Deux
+   * copies divergeraient au premier ajustement.
+   *
+   * Le composant n'embarque aucun script même dans ce mode — il pose des
+   * attributs, la page décide quoi en faire.
+   */
+  interactif?: boolean;
 }
 
-const { fit = "xMidYMid meet", class: className = "", scrim = false } = Astro.props;
+const {
+  fit = "xMidYMid meet",
+  class: className = "",
+  scrim = false,
+  interactif = false,
+} = Astro.props;
 
 const countries = mapData.features.map((f) => ({
   name: f.properties.name,
@@ -91,13 +108,19 @@ const label =
   `Les arcs figurent le maillage régional ; ils sont illustratifs.`;
 ---
 
+{/* `role="img"` rend tous ses descendants présentationnels : en mode
+    interactif il rendrait les foyers définitivement inatteignables au clavier.
+    La carte devient alors un groupe dont le résumé est porté par un `<desc>`
+    référencé, et chaque foyer redevient un élément à part entière. */}
 <svg
   class:list={["map", className]}
   viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
   preserveAspectRatio={fit}
-  role="img"
-  aria-label={label}
+  role={interactif ? "group" : "img"}
+  aria-label={interactif ? "Carte interactive des acteurs" : label}
+  aria-describedby={interactif ? "carte-resume" : undefined}
 >
+  {interactif && <desc id="carte-resume">{label}</desc>}
   <defs>
     {/* Cadre de découpe.
 
@@ -165,8 +188,12 @@ const label =
     <rect class="scrim" width={VIEW_WIDTH} height={VIEW_HEIGHT} fill="url(#scrim)" />
   )}
 
-  <g class="arcs" fill="none">
-    {arcs.map((a) => (
+  {/* Les arcs ne mesurent rien — la source ne documente aucune relation entre
+      acteurs. Ils restent sur la landing, où ils sont du décor assumé et
+      signalés comme tels, et disparaissent de la carte de travail, où tout ce
+      qui est tracé doit pouvoir être interrogé. */}
+  <g class="arcs" fill="none" hidden={interactif}>
+    {!interactif && arcs.map((a) => (
       <>
         <path d={a.d} stroke="url(#arc-line)" stroke-width="1.2" />
         <path
@@ -183,8 +210,27 @@ const label =
   </g>
 
   <g class="nodes">
-    {mapPoints.map((p) => (
-      <g class="node" data-family={p.f} data-count={p.n} data-country={p.country}>
+    {mapPoints.map((p, i) => (
+      <g
+        class="node"
+        data-family={p.f}
+        data-count={p.n}
+        data-country={p.country}
+        {...(interactif && {
+          role: "button",
+          tabindex: "0",
+          // Le filtre teste `data-fams`, jamais `data-family` : celle-ci est la
+          // dominante, qui ne sert qu'à la couleur et à l'isolement de la
+          // landing. Filtrer dessus éteindrait les 14 foyers qui abritent un
+          // CERT sans être à dominante CERT.
+          "data-fams": p.fams,
+          // Index de rendu : la clé qui relie ce foyer à son panneau prérendu.
+          // Valable le temps d'un build, jamais exposée dans une URL — un
+          // centroïde se déplace au moindre réexport.
+          "data-idx": String(i),
+          "aria-label": `${p.n} acteur${p.n > 1 ? "s" : ""}${p.country ? ` — ${p.country}` : ""}`,
+        })}
+      >
         {haloIds.has(`${p.x}:${p.y}`) && (
           <circle class="node-halo" cx={p.x} cy={p.y} r={radius(p.n) * 2.4} fill={p.c} />
         )}
@@ -198,7 +244,12 @@ const label =
           stroke-width="1.8"
         />
         <circle cx={p.x} cy={p.y} r={Math.max(2, radius(p.n) * 0.32)} fill={p.c} />
-        <title>{p.n} acteur{p.n > 1 ? "s" : ""}{p.country ? ` — ${p.country}` : ""}</title>
+        {/* L'infobulle native reste au mode non interactif. En interactif,
+            `aria-label` porte déjà la même phrase et le `<title>` la ferait
+            annoncer deux fois. */}
+        {!interactif && (
+          <title>{p.n} acteur{p.n > 1 ? "s" : ""}{p.country ? ` — ${p.country}` : ""}</title>
+        )}
       </g>
     ))}
   </g>
@@ -233,6 +284,27 @@ const label =
      entièrement en CSS — la légende ne fait que poser l'attribut. */
   .node {
     transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* États du mode interactif. Ils sont pilotés par la page : le composant pose
+     les attributs, `/carte` pose `data-eteint` sur les foyers hors filtre et
+     `data-actif` sur celui qui est ouvert. */
+  .node[role="button"] {
+    cursor: pointer;
+  }
+  .node[data-eteint] {
+    opacity: 0.12;
+  }
+  /* L'anneau de focus global est un `outline`, que Safari et Firefox
+     n'appliquent pas de façon fiable à un `<g>` SVG. Le contour or dessiné sur
+     les cercles est le filet qui rend le parcours clavier réellement visible. */
+  .node[role="button"]:focus-visible {
+    outline: none;
+  }
+  .node[role="button"]:focus-visible circle,
+  .node[data-actif] circle {
+    stroke: var(--color-gold);
+    stroke-width: 2.6;
   }
   :global([data-isolate]) .node {
     opacity: 0.12;
