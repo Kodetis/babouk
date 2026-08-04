@@ -1,12 +1,22 @@
 ---
 import { asset, home } from "../lib/url.js";
 
+/**
+ * Les ancres sont écrites en absolu depuis la racine du site, et non en `#…` :
+ * la barre est partagée avec l'annuaire, où ces sections n'existent pas et où
+ * une ancre relative ne mènerait nulle part.
+ */
+const annuaire = asset("annuaire/");
 const links = [
-  { label: "Familles", href: "#familles" },
-  { label: "Territoire", href: "#territoire" },
-  { label: "Angles morts", href: "#angles-morts" },
-  { label: "Source", href: "#source" },
+  { label: "Annuaire", href: annuaire },
+  { label: "Familles", href: `${home}#familles` },
+  { label: "Territoire", href: `${home}#territoire` },
+  { label: "Angles morts", href: `${home}#angles-morts` },
+  { label: "Source", href: `${home}#source` },
 ];
+
+/** L'annuaire ne se signale pas comme une destination depuis lui-même. */
+const surAnnuaire = Astro.url.pathname.replace(/\/$/, "") === annuaire.replace(/\/$/, "");
 ---
 
 <nav
@@ -27,7 +37,11 @@ const links = [
       {links.map((link) => (
         <a
           href={link.href}
-          class="font-display text-xs font-medium uppercase tracking-[0.12em] text-white/70 transition-colors hover:text-gold"
+          aria-current={surAnnuaire && link.href === annuaire ? "page" : undefined}
+          class:list={[
+            "font-display text-xs font-medium uppercase tracking-[0.12em] transition-colors hover:text-gold",
+            surAnnuaire && link.href === annuaire ? "text-gold" : "text-white/70",
+          ]}
         >
           {link.label}
         </a>
@@ -55,7 +69,11 @@ const links = [
       {links.map((link) => (
         <a
           href={link.href}
-          class="font-display text-sm font-medium uppercase tracking-[0.12em] text-white/70 transition-colors hover:text-gold"
+          aria-current={surAnnuaire && link.href === annuaire ? "page" : undefined}
+          class:list={[
+            "font-display text-sm font-medium uppercase tracking-[0.12em] transition-colors hover:text-gold",
+            surAnnuaire && link.href === annuaire ? "text-gold" : "text-white/70",
+          ]}
         >
           {link.label}
         </a>

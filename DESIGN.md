@@ -46,6 +46,12 @@ typography:
     fontWeight: 600
     lineHeight: 1.25
     letterSpacing: "normal"
+  title-list:
+    fontFamily: "Jost, system-ui, sans-serif"
+    fontSize: "1rem"
+    fontWeight: 600
+    lineHeight: 1.375
+    letterSpacing: "normal"
   editorial:
     fontFamily: "Bodoni Moda, Georgia, serif"
     fontSize: "1.5rem"
@@ -102,7 +108,6 @@ rounded:
   button: "0.5rem"
   panel: "1rem"
   surface: "1rem"
-  pill: "999px"
   pill: "999px"
 spacing:
   gutter: "1.5rem"
@@ -293,6 +298,7 @@ et un monospace qui signale : ceci est une mesure.
 - **Display** (`{typography.display}`) : le seul H1 de la page, en trois lignes — blanc, or, puis une troisième ligne évidée (`-webkit-text-stroke: 1.5px rgba(255,255,255,0.3)`) en `tracking: 0.24em` à `clamp(1rem, 2.6vw, 1.75rem)`.
 - **Headline** (`{typography.headline}`) : titres de section, échelle fluide par paliers `2.25rem → 3rem (≥640px) → 3.5rem (≥768px)`, `text-wrap: balance`, un mot en or.
 - **Title** (`{typography.title}`) : nom de famille dans une carte (`1rem`, `1.25rem`/`1.5rem` pour la carte de tête), libellé de bouton en capitales `tracking: 0.05em`, marque « BABOUK » en `tracking: 0.18em`.
+- **Title-list** (`{typography.title-list}`) : nom d'un acteur dans une liste dense. Le palier `title` à `1.25rem` casse la densité dès qu'il y a plusieurs centaines de lignes ; celui-ci est le seul cran de titre autorisé sous ce régime, et il n'existe que sur les surfaces Operate.
 - **Editorial** (`{typography.editorial}`) : une seule exergue dans toute la page, dans le panneau « Territoire ». `opsz` poussé à **96** — sans lui la variable rend sa coupe de labeur et la didone n'est plus qu'un serif ordinaire. Corps à +4 % seulement (contre +8 % pour Ambroise : la hauteur d'x de Bodoni Moda est déjà plus proche de celle de Jost) et `font-synthesis: none` pour interdire toute fausse graisse.
 - **Body** (`{typography.body}`) : chapô de section à `text-lg leading-relaxed` sur `white/60`–`/70`, corps courant à `text-sm leading-relaxed` sur `white/55`–`/60`. Largeur bornée par `max-w-2xl`, `max-w-xl` ou `max-w-prose`, jamais par une largeur en `ch`.
 - **Readout** (`{typography.readout}`) : tout chiffre affiché. Monospace 700, `tabular-nums`, `line-height: 1`, `letter-spacing: -0.02em`. Taille selon le rang : `2xl/3xl` au rail du héros, `3xl/4xl` dans les cartes de famille, `4xl/5xl` dans les angles morts.
@@ -422,6 +428,20 @@ Filet supérieur blanc 6 %, `py-12`. Marque à gauche, ligne de contexte monospa
 centre (`685 acteurs · 13 pays · Zone Océan Indien`), liens en `label` blanc 50 % → or
 à droite. Seconde rangée séparée par un filet pour la mention d'origine des données et
 la réserve d'indépendance.
+
+### Les composants d'annuaire (mode Operate)
+
+La route `/annuaire` bascule en mode Operate — le visiteur accomplit une tâche.
+Le monde ne change pas d'un pixel ; six composants s'y ajoutent, tous bâtis sur
+le couple blanc 3 % / bordure blanc 6 % et sur la pastille de famille de 8 px.
+Aucun n'a le droit d'apparaître sur une surface Persuade.
+
+- **Champ de recherche** (`.search-field`) : le seul élément de la page autorisé à cette échelle, parce qu'il est l'action principale. Blanc 4 % sur bordure blanc 10 %, rayon de bouton, corps `body`. **Jamais sous 1rem** : sous 16 px, iOS zoome à la mise au point et ne dézoome plus. Focus doublé — l'anneau or global pour le clavier, une bordure or 55 % pour la souris, qui n'obtient pas `:focus-visible`. La croix native de `type="search"` est neutralisée : elle est bleu système, hors palette, et double le bouton d'effacement maison, qui lui existe partout.
+- **Facette** (`.facet`) : ligne de rail en grille pastille / libellé / effectif. L'effectif est en `readout`, aligné à droite : le rail se lit aussi comme un classement. Actif = fond blanc 6 % et bordure à 40 % de la couleur de famille — pas de bande latérale, qui ferait un second geste d'accent. Variante `.facet--plain` sans pastille pour les pays : la pastille nomme une famille, et quatorze disques blancs identiques ne nommeraient rien. Variante `.facet--vide` pour un effectif nul : elle recule en blanc 50 % mais reste lisible et cliquable — « zéro » est une réponse. **44 px de haut minimum sous `lg`**, où le rail se manipule au doigt.
+- **Ligne d'acteur** (`.actor-row`) : un `<details>`, pas une carte. Filet bas de 1 px, pastille de famille, chevron qui pivote de 90° à l'ouverture. La ligne dépliée prend blanc 2 % et son sommaire blanc 4 % : le sommaire et sa fiche partagent un fond, sinon la fiche flotte sous une bande claire sans lui appartenir. **685 panneaux empilés font un mur de bordures** — c'est pour ça que ce n'est pas une carte.
+- **Repère alphabétique** (`.lettre-rail`) : en-tête collant sous la console de recherche. Son offset n'est pas un palier en dur — la hauteur de la console est mesurée en JS et publiée dans `--console-h`, parce qu'elle change entre le téléphone (champ et compteur empilés) et le bureau. Fond **opaque** : une ligne qui transparaît sous le repère se lit comme un défaut de rendu, pas comme de la profondeur.
+- **Étiquette** (`.tag`) : pilule `label` sans couleur, bordure blanc 10 %. La seule couleur d'une ligne est sa famille ; treize étiquettes teintées la noieraient.
+- **Lien de fiche** (`.fiche-link`) : icône 16 px + libellé, souligné **à la demande seulement**. Quatre liens soulignés dans un panneau de six lignes font une grille de traits.
 
 ### La carte (composant signature)
 

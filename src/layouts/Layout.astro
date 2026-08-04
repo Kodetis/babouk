@@ -10,11 +10,41 @@ import monoUrl from "../fonts/jetbrains-mono.woff2?url";
 interface Props {
   title: string;
   description?: string;
+  /** Contrat de direction de la page, injecté en commentaire HTML (voir plus bas). */
+  contract?: string;
 }
+
+/**
+ * Contrat de direction de la landing. C'est le défaut : la landing est la page
+ * qui a fixé le monde visuel, et toute page qui n'apporte pas le sien hérite
+ * du sien. Le commentaire doit survivre au build — d'où l'injection par
+ * `set:html` plutôt qu'un commentaire de frontmatter, que le compilateur
+ * supprime.
+ */
+const LANDING_CONTRACT = `<!--
+      THESIS: Un poste de lecture de la filière, pas sa brochure. Refuse le hero
+      carte-en-decor-derriere-un-titre-centre : la carte est l'instrument, le
+      texte est sa legende, et les trous de la donnee sont affiches comme un
+      releve et non caches.
+      OWN-WORLD: Fond #0f1a30, terres bleu ardoise, or rare en accent de
+      lecture, rouge CLUSIR structurel jamais textuel. Jost geometrique, Bodoni
+      Moda en exergue, JetBrains Mono pour toute mesure. Panneaux blanc 3 % a
+      bordure blanc 6 %, accent lateral 3 px par famille, rails de telemetrie.
+      STORY: Le visiteur institutionnel voit une filiere repartie sur 13 pays,
+      comprend qu'elle ne se resume pas aux Mascareignes, et repart vers
+      l'annuaire ou avec le recensement.
+      FIRST VIEWPORT: Carte plein cadre de Nairobi a Perth, foyers colores et
+      arcs qui circulent. Panneau console cale a gauche : titre en trois lignes
+      685 / 13 PAYS / UN OCEAN, sous-titre, deux actions. Rail de releves
+      colle au bas du cadre, pleine largeur.
+      FORM: Poste de supervision, 7e de la liste structurelle, seed 42786d61.
+      FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+    -->`;
 
 const {
   title,
   description = "Babouk recense 685 acteurs de la cybersécurité dans la zone Océan Indien : entreprises, CERT, laboratoires, organismes de formation, réseaux et services de l'État, de l'Afrique de l'Est à l'Australie.",
+  contract = LANDING_CONTRACT,
 } = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, Astro.site);
@@ -57,25 +87,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     <title>{title}</title>
   </head>
   <body class="font-body antialiased">
-    <!--
-      THESIS: Un poste de lecture de la filière, pas sa brochure. Refuse le hero
-      carte-en-decor-derriere-un-titre-centre : la carte est l'instrument, le
-      texte est sa legende, et les trous de la donnee sont affiches comme un
-      releve et non caches.
-      OWN-WORLD: Fond #0f1a30, terres bleu ardoise, or rare en accent de
-      lecture, rouge CLUSIR structurel jamais textuel. Jost geometrique, Bodoni
-      Moda en exergue, JetBrains Mono pour toute mesure. Panneaux blanc 3 % a
-      bordure blanc 6 %, accent lateral 3 px par famille, rails de telemetrie.
-      STORY: Le visiteur institutionnel voit une filiere repartie sur 13 pays,
-      comprend qu'elle ne se resume pas aux Mascareignes, et repart avec le
-      recensement ou l'attente de l'annuaire.
-      FIRST VIEWPORT: Carte plein cadre de Nairobi a Perth, foyers colores et
-      arcs qui circulent. Panneau console cale a gauche : titre en trois lignes
-      685 / 13 PAYS / UN OCEAN, sous-titre, deux actions. Rail de releves
-      colle au bas du cadre, pleine largeur.
-      FORM: Poste de supervision, 7e de la liste structurelle, seed 42786d61.
-      FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
-    -->
+    <Fragment set:html={contract} />
     <a
       href="#contenu"
       class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[200] focus:bg-gold focus:text-navy-dark focus:px-4 focus:py-2 focus:rounded-lg focus:font-bold"

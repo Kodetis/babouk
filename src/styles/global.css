@@ -264,6 +264,11 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 .btn-outline:hover { background: var(--color-clusir-red); color: #ffffff; }
+/* `display: inline-flex` bat `.hidden` et `[hidden]` à égalité de spécificité,
+   puisque cette règle est écrite après les utilitaires. Sans cette reprise, un
+   bouton masqué par le script se peint quand même — vide. */
+.btn-outline.hidden,
+.btn-outline[hidden] { display: none; }
 
 /* Action différée. Reprend le badge « bientôt » de la charte : ni lien, ni
    bouton — un libellé qui annonce son indisponibilité au lieu de la cacher. */
@@ -330,6 +335,176 @@ body {
 }
 .accent-card:hover { border-color: rgba(255, 255, 255, 0.15); }
 .accent-card:hover::before { transform: scaleY(1); }
+
+/* ========== ANNUAIRE ==========
+   Le poste de recherche. Rien ici n'introduit de matière nouvelle : c'est le
+   couple blanc 3 % / bordure blanc 6 % du reste du site, la pastille de famille
+   de 8 px et le monospace des mesures, redistribués pour une tâche au lieu
+   d'une lecture. */
+
+/* Le champ de recherche. Un seul élément de la page a le droit d'être aussi
+   grand : c'est l'action principale, et elle doit être atteinte sans être
+   cherchée. Le focus est doublé — l'anneau or global pour le clavier, la
+   bordure claire pour la souris, qui n'obtient pas `:focus-visible`. */
+.search-field {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem; /* rayon de bouton : le champ est un contrôle. */
+  color: #ffffff;
+  font-family: var(--font-display);
+  /* Palier « Body ». Jamais moins de 16 px : sous ce seuil, iOS zoome la page
+     à la mise au point du champ et ne la dézoome jamais. */
+  font-size: 1.125rem;
+  line-height: 1.4;
+  padding: 0.95rem 3rem 0.95rem 3rem;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+.search-field::placeholder {
+  color: rgba(255, 255, 255, 0.5); /* 5,15:1 — plancher AA, pas en dessous. */
+}
+.search-field:hover { border-color: rgba(255, 255, 255, 0.16); }
+/* La croix native de `type="search"` sous WebKit : bleu système, hors palette,
+   et doublon du bouton d'effacement maison, qui lui existe partout. */
+.search-field::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.search-field:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 222, 89, 0.55);
+}
+.search-field:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 3px;
+}
+
+/* Ligne de facette du rail. Grille en trois temps : pastille, libellé,
+   effectif aligné à droite en chiffres tabulaires — le rail se lit aussi comme
+   un classement, pas seulement comme une rangée de cases à cocher. */
+.facet {
+  display: grid;
+  grid-template-columns: 0.5rem 1fr auto;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  text-align: left;
+  color: rgba(255, 255, 255, 0.65);
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+.facet:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+}
+.facet-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--accent, rgba(255, 255, 255, 0.45));
+  transition: transform 0.2s ease;
+}
+.facet:hover .facet-dot { transform: scale(1.25); }
+.facet[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: color-mix(in srgb, var(--accent, #ffffff) 40%, transparent);
+  color: #ffffff;
+}
+.facet[aria-pressed="true"] .facet-dot { transform: scale(1.25); }
+
+/* Variante sans pastille : la pastille nomme une famille. Sur les pays, un
+   quatorzième disque blanc identique n'apporterait aucune information. */
+.facet--plain { grid-template-columns: 1fr auto; }
+
+/* Facette qui ne ramènerait rien sous la contrainte en cours. Elle reste
+   lisible et cliquable — « zéro » est une réponse — mais elle recule. */
+.facet--vide { color: rgba(255, 255, 255, 0.5); }
+.facet--vide .facet-dot { opacity: 0.4; }
+
+/* Sous `lg`, le rail est manipulé au doigt : 44 px de haut, pas 33. */
+@media (max-width: 1023px) {
+  .facet { min-height: 2.75rem; padding-block: 0.5rem; }
+}
+
+/* Repère alphabétique. Il se cale sous la console de recherche, dont la hauteur
+   change entre le téléphone (champ et compteur empilés) et le bureau : elle est
+   mesurée au chargement et publiée dans `--console-h`, plutôt que devinée par
+   un palier en dur qui laisserait une bande de lignes visible entre les deux.
+   Fond opaque, et non translucide : une ligne qui transparaît sous le repère
+   se lit comme un défaut de rendu, pas comme de la profondeur. */
+.lettre-rail {
+  position: sticky;
+  top: calc(5rem + var(--console-h, 6rem));
+  z-index: 10;
+  background: var(--bg-primary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 0.375rem 0.75rem;
+}
+
+/* La tuile de logo n'existe qu'une fois l'image réellement peinte : un tiers
+   des URL distantes répondent 404, et un carré vide ressemble à un bug. */
+img[data-logo]:not([data-loaded]) { display: none; }
+
+/* Une ligne d'acteur. Pas une carte : 685 panneaux empilés font un mur de
+   bordures, et la liste perd sa colonne de lecture. Un filet bas, une pastille
+   de famille, et le fond qui répond au survol — rien d'autre. */
+.actor-row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.actor-row > summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+  padding: 0.9rem 0.75rem;
+  cursor: pointer;
+  list-style: none;
+  transition: background-color 0.2s ease;
+}
+.actor-row > summary::-webkit-details-marker { display: none; }
+.actor-row > summary:hover { background: rgba(255, 255, 255, 0.03); }
+/* Une ligne dépliée se lit comme un bloc : le sommaire et sa fiche partagent un
+   fond, sinon la fiche flotte sous une bande claire sans lui appartenir. */
+.actor-row[open] { background: rgba(255, 255, 255, 0.02); }
+.actor-row[open] > summary { background: rgba(255, 255, 255, 0.04); }
+.actor-row[open] .actor-chevron,
+details[open] > summary .actor-chevron { transform: rotate(90deg); }
+.actor-chevron {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  color: rgba(255, 255, 255, 0.5);
+}
+.actor-row > summary:hover .actor-chevron { color: var(--color-gold); }
+
+/* Étiquette de domaine ou de spécialité. Pilule sans couleur : la seule
+   couleur d'une ligne est sa famille, et treize étiquettes teintées la
+   noieraient. */
+.tag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* Lien de la fiche dépliée. Souligné à la demande, jamais au repos : quatre
+   liens soulignés dans un panneau de six lignes font une grille de traits. */
+.fiche-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: rgba(255, 255, 255, 0.75);
+  transition: color 0.2s ease;
+}
+.fiche-link:hover { color: var(--color-gold); text-decoration: underline; text-underline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .facet, .facet-dot, .actor-row > summary, .actor-chevron, .search-field {
+    transition-duration: 0.01ms;
+  }
+}
 
 /* ========== TEXTURES ========== */
 
