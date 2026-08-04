@@ -4,7 +4,10 @@ import tailwindcss from '@tailwindcss/vite';
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://babouk.kodetis.com',
+  // GitHub Pages sert le dépôt Kodetis/babouk sous un sous-chemin. Sans `base`,
+  // tous les chemins absolus pointent sur la racine du domaine et renvoient 404.
+  site: 'https://kodetis.github.io',
+  base: '/babouk',
   outDir: './docs',
   // La barre d'outils fausse les captures d'inspection et n'apporte rien ici.
   devToolbar: { enabled: false },

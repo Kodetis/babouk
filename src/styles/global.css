@@ -20,22 +20,27 @@
                                         source : aucune raison de substituer.
 
    Sous-ensembles latins récupérés depuis Google Fonts, servis en local :
-   104 Ko pour les trois familles, contre sept fichiers à l'origine. */
+   104 Ko pour les trois familles, contre sept fichiers à l'origine.
+
+   Les fichiers vivent dans `src/fonts/` et non dans `public/`, et sont donc
+   référencés relativement. Vite les empreinte, les émet à côté de la feuille
+   compilée et réécrit ces URL en appliquant la base du site — un chemin absolu
+   `/fonts/…` serait laissé tel quel et renverrait 404 sous `/babouk/`. */
 @font-face {
   font-family: "Jost";
-  src: url("/fonts/jost.woff2") format("woff2");
+  src: url("../fonts/jost.woff2") format("woff2");
   font-weight: 400 700;
   font-display: swap;
 }
 @font-face {
   font-family: "Bodoni Moda";
-  src: url("/fonts/bodoni-moda.woff2") format("woff2");
+  src: url("../fonts/bodoni-moda.woff2") format("woff2");
   font-weight: 400 600;
   font-display: swap;
 }
 @font-face {
   font-family: "JetBrains Mono";
-  src: url("/fonts/jetbrains-mono.woff2") format("woff2");
+  src: url("../fonts/jetbrains-mono.woff2") format("woff2");
   font-weight: 400 700;
   font-display: swap;
 }

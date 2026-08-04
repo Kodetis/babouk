@@ -1,12 +1,13 @@
 ---
 import { coverage } from "../lib/data.js";
+import { asset, home } from "../lib/url.js";
 ---
 
 <footer class="border-t border-white/[0.06] py-12">
   <div class="mx-auto max-w-7xl px-6">
     <div class="flex flex-col items-center justify-between gap-6 md:flex-row">
-      <a href="/" class="group flex items-center gap-3" aria-label="Babouk — accueil">
-        <img src="/logo-babouk-mark.png" alt="" width="256" height="242" class="logo-mark h-9 shrink-0" />
+      <a href={home} class="group flex items-center gap-3" aria-label="Babouk — accueil">
+        <img src={asset("logo-babouk-mark.png")} alt="" width="256" height="242" class="logo-mark h-9 shrink-0" />
         <span class="font-display text-base font-bold tracking-[0.18em] text-white">BABOUK</span>
       </a>
 
@@ -16,7 +17,7 @@ import { coverage } from "../lib/data.js";
 
       <div class="flex items-center gap-4">
         <a
-          href="/acteurs.csv"
+          href={asset("acteurs.csv")}
           download
           class="meta text-white/50 transition-colors hover:text-gold"
         >

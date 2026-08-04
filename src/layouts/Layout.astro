@@ -1,5 +1,11 @@
 ---
 import "../styles/global.css";
+import { asset } from "../lib/url.js";
+// Importées en `?url` : Vite rend l'URL empreintée et préfixée par la base,
+// c'est-à-dire exactement celle que la feuille de styles ira chercher. Un
+// chemin écrit à la main précharegrait un fichier différent de celui utilisé.
+import jostUrl from "../fonts/jost.woff2?url";
+import monoUrl from "../fonts/jetbrains-mono.woff2?url";
 
 interface Props {
   title: string;
@@ -21,7 +27,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
     <meta name="theme-color" content="#0f1a30" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href={asset("favicon.svg")} />
     <link rel="canonical" href={canonical} />
 
     {/*
@@ -35,8 +41,8 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
       toujours récupérées en mode CORS, et sans lui le preload est ignoré puis
       le fichier téléchargé deux fois.
     */}
-    <link rel="preload" href="/fonts/jost.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preload" href="/fonts/jetbrains-mono.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={jostUrl} as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={monoUrl} as="font" type="font/woff2" crossorigin />
 
     <meta name="robots" content="index, follow" />
     <meta name="author" content="Kodetis" />
