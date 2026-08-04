@@ -3,11 +3,10 @@ import Layout from "../layouts/Layout.astro";
 import Navbar from "../components/Navbar.astro";
 import Footer from "../components/Footer.astro";
 import MapOceanIndien from "../components/MapOceanIndien.astro";
-import { familyCounts, countryCounts, coverage, lastUpdate } from "../lib/data.js";
+import { familyCounts, countryCounts, coverage } from "../lib/data.js";
 import { asset } from "../lib/url.js";
 
 const nf = new Intl.NumberFormat("fr-FR");
-const updated = new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" }).format(lastUpdate);
 
 /** Relevés du rail de héros. Aucune valeur écrite à la main. */
 const readouts = [
@@ -30,32 +29,15 @@ const islandCount = countryCounts
   .reduce((sum, c) => sum + c.count, 0);
 const outsideIslandsShare = Math.round(((withCountry - islandCount) / withCountry) * 100);
 
-/**
- * Les manques, tels quels. Chaque ligne est un défaut de la source qu'un
- * annuaire ordinaire retrancherait de son total sans le dire.
- */
-const blindSpots = [
-  {
-    value: coverage.unlocated,
-    label: "sans coordonnées",
-    body: "Aucune latitude, aucune longitude. Ces acteurs existent dans le recensement mais ne peuvent être placés nulle part : ils ne sont sur aucune carte, y compris la nôtre.",
-  },
-  {
-    value: coverage.withoutCountry,
-    label: "sans pays",
-    body: `L'adresse est vide ou trop partielle pour rattacher la fiche à un pays. Le classement territorial porte donc sur ${nf.format(withCountry)} acteurs, pas sur ${nf.format(coverage.total)}.`,
-  },
-  {
-    value: coverage.unclassified,
-    label: "sans famille",
-    body: "La typologie n'a pas été renseignée, ou l'a été avec une valeur hors référentiel. Ces acteurs n'apparaissent dans aucune des huit familles.",
-  },
-  {
-    value: coverage.offFrame,
-    label: "hors cadre",
-    body: "Un acteur géolocalisé à Nantes, à 47° nord. La fenêtre de la carte s'arrête à 31° nord : il est compté partout ailleurs, mais aucun point ne le représente.",
-  },
-];
+/** Poids du trio de tête face à l'ensemble des îles du bassin, Mascareignes comprises. */
+const ISLANDS = [...MASCAREIGNES, "Sri Lanka", "Maldives"];
+const islandsCount = countryCounts
+  .filter((c) => ISLANDS.includes(c.country))
+  .reduce((sum, c) => sum + c.count, 0);
+const topThree = countryCounts.slice(0, 3);
+const topThreeCount = topThree.reduce((sum, c) => sum + c.count, 0);
+const leaderShareLocated = Math.round((leader.count / withCountry) * 100);
+const reunionRank = countryCounts.findIndex((c) => c.country === "La Réunion") + 1;
 ---
 
 <Layout title="Babouk — les acteurs cyber de l'océan Indien">
@@ -338,8 +320,14 @@ const blindSpots = [
       <div class="reveal mb-14 max-w-3xl">
         <span class="section-label">02 // Territoire</span>
         <h2 class="section-title mt-5">
-          Treize pays, <span class="text-gold">un seul bassin</span>
+          Treize pays, <span class="text-gold">aucun centre</span>
         </h2>
+        <p class="mt-5 max-w-2xl text-lg leading-relaxed text-white/60">
+          Le classement porte sur les {nf.format(withCountry)} fiches dont le pays est
+          renseigné. En tête, {leader.country} pèse {leaderShareLocated}&nbsp;% : aucun pays
+          n'atteint le quart du bassin, et l'écart entre le premier et le sixième tient en
+          {" "}{leader.count - countryCounts[5].count} acteurs.
+        </p>
       </div>
 
       <div class="grid gap-14 lg:grid-cols-12 lg:gap-16">
@@ -381,112 +369,32 @@ const blindSpots = [
               que l'exergue, et sans cela la colonne droite se vide dès le
               septième pays. */}
           <figure class="reveal-right panel p-8 lg:sticky lg:top-28">
-            <blockquote class="font-editorial text-2xl leading-snug text-white sm:text-3xl">
-              « Océan Indien » fait penser aux Mascareignes. Le recensement dit autre chose :
-              La&nbsp;Réunion arrive sixième.
+            {/* Bodoni Moda en `opsz` 96 : les déliés de la didone tombent sous le
+                pixel sur fond marine et le texte se lit mal. Le bloc repasse sur
+                la display de la charte, comme les titres de section. */}
+            <blockquote class="font-display text-2xl font-medium leading-snug tracking-[-0.015em] text-white sm:text-3xl">
+              La&nbsp;Réunion arrive {reunionRank}<sup class="text-base">e</sup>. Le poids du bassin
+              est sur ses rives continentales, pas dans ses îles.
             </blockquote>
             <figcaption class="mt-7 border-t border-white/[0.08] pt-5 text-sm leading-relaxed text-white/55">
-              {leader.country} ({leader.count}), {countryCounts[1].country} ({countryCounts[1].count})
-              et {countryCounts[2].country} ({countryCounts[2].count}) devancent à eux seuls
-              l'ensemble des îles. Cadrer la carte sur les Mascareignes laisserait
-              {" "}{outsideIslandsShare}&nbsp;% des acteurs dont le pays est connu hors du champ —
-              c'est pourquoi celle du haut de page va de l'Afrique du Sud à l'Australie.
+              <p>
+                {topThree.map((c) => c.country).join(", ")} totalisent {topThreeCount} acteurs,
+                contre {islandsCount} pour l'ensemble des îles du bassin —&nbsp;Mascareignes,
+                Sri&nbsp;Lanka et Maldives réunies.
+              </p>
+              <p class="mt-4">
+                C'est ce qui fixe le cadrage de la carte : la réduire aux Mascareignes en
+                sortirait {outsideIslandsShare}&nbsp;% des acteurs situés. Elle va donc de
+                l'Afrique du Sud à l'Australie.
+              </p>
+              <p class="mt-4">
+                {coverage.withoutCountry} fiches n'ont pas d'adresse exploitable : elles comptent
+                dans le total de {nf.format(coverage.total)} acteurs, mais dans aucun pays de
+                cette liste.
+              </p>
             </figcaption>
           </figure>
         </div>
-      </div>
-    </div>
-  </section>
-
-  {/* ============================= ANGLES MORTS ============================= */}
-  <section id="angles-morts" class="noise-overlay relative overflow-hidden py-28 md:py-32">
-    <div class="relative z-10 mx-auto max-w-7xl px-6">
-      <div class="reveal mb-14 max-w-3xl">
-        <span class="section-label">03 // Angles morts</span>
-        <h2 class="section-title mt-5">
-          Ce que le recensement <span class="text-gold">ne sait pas</span>
-        </h2>
-        <p class="mt-5 max-w-2xl text-lg leading-relaxed text-white/60">
-          Un annuaire de filière qui masque ses trous ment sur la filière. Voici les nôtres,
-          comptés sur les données mêmes qui alimentent le reste de cette page.
-        </p>
-      </div>
-
-      <ul class="grid gap-4 sm:grid-cols-2">
-        {blindSpots.map((spot, i) => (
-          <li
-            class:list={["panel accent-card reveal p-6 sm:p-8", `delay-${Math.min(6, i + 1)}`]}
-            style="--accent:#e56b5f"
-          >
-            <div class="flex items-baseline gap-4">
-              <span class="readout text-4xl text-clusir-red-bright sm:text-5xl">{spot.value}</span>
-              <span class="meta text-white/50">{spot.label}</span>
-            </div>
-            <p class="mt-4 max-w-prose text-sm leading-relaxed text-white/60">{spot.body}</p>
-          </li>
-        ))}
-      </ul>
-    </div>
-  </section>
-
-  {/* ================================ SOURCE ================================ */}
-  <section id="source" class="relative overflow-hidden py-28 md:py-32">
-    <div
-      class="absolute inset-0"
-      style="background:linear-gradient(to bottom,#0f1a30,#192842)"
-      aria-hidden="true"
-    >
-    </div>
-
-    {/* Même gouttière que les sections 01 à 03 : en `max-w-4xl`, le bord gauche
-        du texte décrochait de 192 px sur la dernière section. */}
-    <div class="relative z-10 mx-auto max-w-7xl px-6">
-      <div class="reveal">
-        <span class="section-label">04 // Source</span>
-        <h2 class="section-title mt-5">Vérifiez par vous-même</h2>
-        <p class="mt-6 max-w-2xl text-lg leading-relaxed text-white/65">
-          Chaque chiffre de cette page est calculé à la publication à partir d'un seul fichier,
-          que vous pouvez télécharger. Rien n'est saisi à la main, rien n'est estimé, rien n'est
-          complété.
-        </p>
-      </div>
-
-      <dl
-        class="reveal delay-2 mt-12 grid max-w-4xl gap-px overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.07] sm:grid-cols-2"
-      >
-        <div class="bg-navy-dark p-6">
-          <dt class="meta text-white/55">Origine</dt>
-          <dd class="mt-2.5 text-sm leading-relaxed text-white/75">
-            Annuaire Communecter de l'EDIH La Réunion, exporté via l'API publique de la
-            plateforme.
-          </dd>
-        </div>
-        <div class="bg-navy-dark p-6">
-          <dt class="meta text-white/55">Dernière mise à jour</dt>
-          <dd class="mt-2.5 text-sm leading-relaxed text-white/75">{updated}</dd>
-        </div>
-        <div class="bg-navy-dark p-6">
-          <dt class="meta text-white/55">Format</dt>
-          <dd class="mt-2.5 text-sm leading-relaxed text-white/75">
-            CSV, {nf.format(coverage.total)} lignes, 30 colonnes, UTF-8.
-          </dd>
-        </div>
-        <div class="bg-navy-dark p-6">
-          <dt class="meta text-white/55">Réserve</dt>
-          <dd class="mt-2.5 text-sm leading-relaxed text-white/75">
-            Les arcs de la carte sont illustratifs : aucune relation entre acteurs n'est
-            documentée dans la source.
-          </dd>
-        </div>
-      </dl>
-
-      <div class="reveal delay-3 mt-10">
-        <a href={asset("acteurs.csv")} download class="btn-primary">
-          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-          </svg>
-          acteurs.csv
-        </a>
       </div>
     </div>
   </section>

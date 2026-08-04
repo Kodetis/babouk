@@ -1,10 +1,10 @@
 /**
  * Résolution des chemins vers `public/`.
  *
- * Le site est publié sous un sous-chemin (`/babouk/` sur GitHub Pages). Astro
- * préfixe automatiquement ce qu'il empaquette lui-même, mais pas les chaînes
- * littérales pointant vers `public/` : un `href="/acteurs.csv"` écrit en dur
- * reste à la racine du domaine et renvoie 404.
+ * Le site est aujourd'hui servi à la racine de son domaine, mais l'helper reste :
+ * Astro préfixe ce qu'il empaquette lui-même, jamais les chaînes littérales
+ * pointant vers `public/`. Si une `base` revient un jour, un `href="/acteurs.csv"`
+ * écrit en dur repartirait à la racine du domaine et renverrait 404.
  *
  * Les fontes échappent à ce problème parce qu'elles vivent dans `src/fonts/` :
  * Vite les traite, les empreinte et réécrit leur URL en appliquant la base.

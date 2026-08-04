@@ -74,7 +74,11 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     <link rel="preload" href={jostUrl} as="font" type="font/woff2" crossorigin />
     <link rel="preload" href={monoUrl} as="font" type="font/woff2" crossorigin />
 
-    <meta name="robots" content="index, follow" />
+    {/* Le site ne doit pas être indexé. La balise double le robots.txt : celui-ci
+        interdit le crawl, celle-là interdit l'indexation — une URL connue par
+        ailleurs peut être indexée sans jamais avoir été crawlée. */}
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="googlebot" content="noindex, nofollow" />
     <meta name="author" content="Kodetis" />
 
     <meta property="og:title" content={title} />
