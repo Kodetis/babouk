@@ -1,9 +1,0 @@
-# Site non indexable.
-#
-# Servi à la racine de babouk.kodetis.cloud, donc effectivement lu par les
-# robots. La balise <meta name="robots" content="noindex, nofollow"> du Layout
-# le double : robots.txt interdit le crawl, la balise interdit l'indexation —
-# une URL déjà connue par ailleurs peut être indexée sans être crawlée.
-
-User-agent: *
-Disallow: /

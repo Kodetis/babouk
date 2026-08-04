@@ -9,7 +9,9 @@ export default defineConfig({
   // record CNAME `babouk` doit rester en DNS only le temps que GitHub émette
   // son certificat, la validation ACME ne passant pas à travers le proxy.
   site: 'https://babouk.kodetis.cloud',
-  outDir: './docs',
+  // Sortie par défaut : `dist/`, ignoré par git. Le site est construit par le
+  // workflow GitHub Actions et déployé depuis l'artefact, jamais commité.
+
   // La barre d'outils fausse les captures d'inspection et n'apporte rien ici.
   devToolbar: { enabled: false },
   vite: {

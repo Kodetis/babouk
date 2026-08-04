@@ -26,18 +26,23 @@ CSV. Les manques de la source sont conservés, jamais retranchés en silence :
 ```sh
 npm install
 npm run dev      # http://localhost:4321
-npm run build    # -> ./docs/
+npm run build    # -> ./dist/
 ```
 
 `prebuild` régénère le fond de carte et le logo, puis copie le CSV dans
-`public/`. La sortie va dans `docs/` parce que GitHub Pages sert ce dossier.
+`public/`.
 
 ## Déploiement
 
-GitHub Pages, branche `main`, dossier `/docs` — le build est donc commité.
-`public/CNAME` porte le domaine ; côté Cloudflare, le record `babouk` est un
-CNAME vers `kodetis.github.io` en **DNS only** tant que GitHub n'a pas émis son
-certificat, la validation ACME ne traversant pas le proxy.
+GitHub Actions — `.github/workflows/deploy.yml` construit et déploie à chaque
+push sur `main`. **Aucune sortie de build n'est commitée** : le dépôt ne
+contient que du code.
+
+`public/CNAME` porte le domaine et se retrouve donc dans l'artefact déployé.
+Côté Cloudflare, le record `babouk` est un CNAME vers `kodetis.github.io` en
+**DNS only** tant que GitHub n'a pas émis son certificat — la validation ACME
+ne traverse pas le proxy. Une fois le certificat émis, le proxy peut être
+réactivé avec SSL/TLS en Full (strict).
 
 Le site n'est pas indexable : `robots.txt` interdit le crawl, la balise
 `meta robots` interdit l'indexation.
