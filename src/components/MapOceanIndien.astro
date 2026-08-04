@@ -1,0 +1,266 @@
+---
+/**
+ * Carte de la zone Océan Indien.
+ *
+ * Tout est rendu au build : les côtes deviennent des chemins SVG, les acteurs
+ * des cercles déjà projetés. Le client ne reçoit ni géométrie source, ni code
+ * de projection — et l'animation est intégralement en CSS, donc la carte vit
+ * même si le JavaScript ne s'exécute pas.
+ *
+ * Accessibilité : la carte est un `role="img"` porteur d'un résumé. Tout ce
+ * qu'elle montre est relu en texte dans les sections « Familles », « Territoire »
+ * et « Angles morts » — elle n'est jamais le seul porteur d'une information.
+ */
+import mapData from "../data/map-oi.json";
+import { geometryToPath, VIEW_WIDTH, VIEW_HEIGHT, project } from "../lib/projection.js";
+import { mapPoints, mapArcs, coverage } from "../lib/data.js";
+
+interface Props {
+  /** `meet` montre la fenêtre entière, `slice` la remplit en rognant. */
+  fit?: string;
+  class?: string;
+  /**
+   * Voile de lisibilité interne, posé entre les terres et les acteurs.
+   *
+   * Un voile appliqué par-dessus toute la carte éteindrait aussi les foyers :
+   * à 0,8 d'opacité, un point bleu vif devient indiscernable du fond. En le
+   * glissant sous les groupes `arcs` et `nodes`, la géographie s'estompe
+   * derrière le panneau de titre pendant que les acteurs — le sujet — restent
+   * lumineux sur toute la largeur.
+   */
+  scrim?: boolean;
+}
+
+const { fit = "xMidYMid meet", class: className = "", scrim = false } = Astro.props;
+
+const countries = mapData.features.map((f) => ({
+  name: f.properties.name,
+  inScope: f.properties.inScope,
+  d: geometryToPath(f.geometry),
+}));
+
+/** Graticule : repères d'instrument, pas décor. Méridiens tous les 20°,
+    parallèles tous les 15°, plus l'équateur qui sert de ligne de foi. */
+const meridians = [20, 40, 60, 80, 100, 120, 140].map((lon) => ({
+  lon,
+  x: project(lon, 0)[0],
+}));
+const parallels = [30, 15, 0, -15, -30].map((lat) => ({
+  lat,
+  y: project(0, lat)[1],
+}));
+
+/**
+ * Arc bombé entre deux foyers. La flèche vaut 18 % de la corde, perpendiculaire
+ * à celle-ci — assez pour lire une trajectoire, assez peu pour ne pas croiser
+ * les terres au milieu de la fenêtre.
+ */
+function arcPath({ x1, y1, x2, y2 }) {
+  const mx = (x1 + x2) / 2;
+  const my = (y1 + y2) / 2;
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.hypot(dx, dy);
+  const cx = mx - (dy / len) * len * 0.18;
+  const cy = my + (dx / len) * len * 0.18;
+  return `M${x1} ${y1}Q${cx.toFixed(1)} ${cy.toFixed(1)} ${x2} ${y2}`;
+}
+
+const arcs = mapArcs.map((a, i) => ({
+  d: arcPath(a),
+  length: Math.round(a.d * 1.1),
+  duration: (3.6 + (i % 5) * 0.9).toFixed(2),
+  delay: ((i * 0.47) % 6).toFixed(2),
+}));
+
+/** Les cinq plus gros foyers reçoivent un anneau qui respire. Au-delà, la carte
+    se met à clignoter de partout et plus rien ne ressort. */
+const HALO_COUNT = 5;
+const haloIds = new Set(
+  [...mapPoints].sort((a, b) => b.n - a.n).slice(0, HALO_COUNT).map((p) => `${p.x}:${p.y}`)
+);
+
+/** Rayon en racine de l'effectif : c'est l'aire du disque qui doit porter le
+    nombre, pas son diamètre, sinon un foyer de 63 acteurs écrase la carte. */
+const radius = (n) => Math.round((4 + Math.sqrt(n) * 1.9) * 10) / 10;
+
+const label =
+  `Carte de la zone Océan Indien, de l'Afrique de l'Est à l'Australie. ` +
+  `${coverage.onMap} des ${coverage.total} acteurs recensés y sont placés, ` +
+  `regroupés en ${mapPoints.length} foyers et colorés par famille. ` +
+  `Les arcs figurent le maillage régional ; ils sont illustratifs.`;
+---
+
+<svg
+  class:list={["map", className]}
+  viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
+  preserveAspectRatio={fit}
+  role="img"
+  aria-label={label}
+>
+  <defs>
+    {/* Lueur centrée sur le bassin, qui fait remonter l'océan sans introduire
+        une seconde valeur de bleu : même teinte, opacité décroissante. */}
+    <radialGradient id="sea-glow" cx="45%" cy="52%" r="62%">
+      <stop offset="0%" stop-color="#1b2c4c" stop-opacity="0.9" />
+      <stop offset="55%" stop-color="#152340" stop-opacity="0.45" />
+      <stop offset="100%" stop-color="#0c1526" stop-opacity="0" />
+    </radialGradient>
+    {/* Le voile s'éteint à 42 % de la largeur : au-delà, la carte est nue. */}
+    <linearGradient id="scrim" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0f1a30" stop-opacity="0.92" />
+      <stop offset="22%" stop-color="#0f1a30" stop-opacity="0.86" />
+      <stop offset="42%" stop-color="#0f1a30" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="arc-line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#5b8cc9" stop-opacity="0.05" />
+      <stop offset="50%" stop-color="#5b8cc9" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#5b8cc9" stop-opacity="0.05" />
+    </linearGradient>
+  </defs>
+
+  <rect width={VIEW_WIDTH} height={VIEW_HEIGHT} fill="var(--map-sea)" />
+  <rect width={VIEW_WIDTH} height={VIEW_HEIGHT} fill="url(#sea-glow)" />
+
+  <g class="graticule" stroke="rgba(120,150,200,0.10)" stroke-width="1" fill="none">
+    {meridians.map((m) => <line x1={m.x} y1="0" x2={m.x} y2={VIEW_HEIGHT} />)}
+    {parallels.map((p) => (
+      <line
+        x1="0"
+        y1={p.y}
+        x2={VIEW_WIDTH}
+        y2={p.y}
+        stroke={p.lat === 0 ? "rgba(120,150,200,0.2)" : undefined}
+      />
+    ))}
+  </g>
+
+  <g class="landmass">
+    {countries.map((c) => (
+      <path
+        d={c.d}
+        fill={c.inScope ? "var(--map-land-scope)" : "var(--map-land)"}
+        stroke={c.inScope ? "var(--map-stroke-scope)" : "var(--map-stroke)"}
+        stroke-width={c.inScope ? 1 : 0.75}
+        stroke-linejoin="round"
+      />
+    ))}
+  </g>
+
+  {scrim && (
+    <rect class="scrim" width={VIEW_WIDTH} height={VIEW_HEIGHT} fill="url(#scrim)" />
+  )}
+
+  <g class="arcs" fill="none">
+    {arcs.map((a) => (
+      <>
+        <path d={a.d} stroke="url(#arc-line)" stroke-width="1.2" />
+        <path
+          class="arc-pulse"
+          d={a.d}
+          stroke="var(--color-gold)"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-dasharray={`18 ${a.length}`}
+          style={`--arc-length:${a.length + 18}px;animation-duration:${a.duration}s;animation-delay:${a.delay}s`}
+        />
+      </>
+    ))}
+  </g>
+
+  <g class="nodes">
+    {mapPoints.map((p) => (
+      <g class="node" data-family={p.f} data-count={p.n} data-country={p.country}>
+        {haloIds.has(`${p.x}:${p.y}`) && (
+          <circle class="node-halo" cx={p.x} cy={p.y} r={radius(p.n) * 2.4} fill={p.c} />
+        )}
+        <circle
+          cx={p.x}
+          cy={p.y}
+          r={radius(p.n)}
+          fill={p.c}
+          fill-opacity="0.3"
+          stroke={p.c}
+          stroke-width="1.8"
+        />
+        <circle cx={p.x} cy={p.y} r={Math.max(2, radius(p.n) * 0.32)} fill={p.c} />
+        <title>{p.n} acteur{p.n > 1 ? "s" : ""}{p.country ? ` — ${p.country}` : ""}</title>
+      </g>
+    ))}
+  </g>
+</svg>
+
+<style>
+  .map {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* Le tiret court parcourt l'arc : c'est le seul mouvement porteur de sens de
+     la carte — un échange qui circule. La longueur du trait est passée en
+     custom property par élément, la seule valeur qui change d'un arc à l'autre. */
+  .arc-pulse {
+    stroke-dashoffset: var(--arc-length);
+    animation-name: arc-travel;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    opacity: 0.75;
+  }
+
+  @keyframes arc-travel {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  /* Isolement d'une famille. Le filtre est porté par un attribut sur un
+     ancêtre : aucune classe n'est écrite sur les 55 foyers, et le rendu est
+     entièrement en CSS — la légende ne fait que poser l'attribut. */
+  .node {
+    transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  :global([data-isolate]) .node {
+    opacity: 0.12;
+  }
+  :global([data-isolate="entreprises"]) .node[data-family="entreprises"],
+  :global([data-isolate="defense"]) .node[data-family="defense"],
+  :global([data-isolate="formation"]) .node[data-family="formation"],
+  :global([data-isolate="reseaux"]) .node[data-family="reseaux"],
+  :global([data-isolate="cert"]) .node[data-family="cert"],
+  :global([data-isolate="recherche"]) .node[data-family="recherche"],
+  :global([data-isolate="association"]) .node[data-family="association"],
+  :global([data-isolate="accompagnement"]) .node[data-family="accompagnement"] {
+    opacity: 1;
+  }
+  :global([data-isolate]) .arcs {
+    opacity: 0.25;
+    transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .node-halo {
+    opacity: 0.14;
+    animation: node-breathe 4.5s ease-in-out infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  @keyframes node-breathe {
+    0%, 100% { opacity: 0.08; transform: scale(0.9); }
+    50% { opacity: 0.2; transform: scale(1.06); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* L'arc garde un tiret posé en milieu de course : la trajectoire reste
+       lisible, elle cesse simplement de défiler. */
+    .arc-pulse {
+      animation: none;
+      stroke-dashoffset: calc(var(--arc-length) / 2);
+      opacity: 0.5;
+    }
+    .node-halo {
+      animation: none;
+      opacity: 0.14;
+    }
+  }
+</style>

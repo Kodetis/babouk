@@ -1,0 +1,510 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Navbar from "../components/Navbar.astro";
+import Footer from "../components/Footer.astro";
+import MapOceanIndien from "../components/MapOceanIndien.astro";
+import { familyCounts, countryCounts, coverage, lastUpdate } from "../lib/data.js";
+
+const nf = new Intl.NumberFormat("fr-FR");
+const updated = new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" }).format(lastUpdate);
+
+/** Relevés du rail de héros. Aucune valeur écrite à la main. */
+const readouts = [
+  { value: nf.format(coverage.total), label: "acteurs" },
+  { value: String(coverage.families), label: "familles" },
+  { value: String(coverage.countries), label: "pays" },
+  { value: nf.format(coverage.onMap), label: "sur la carte" },
+];
+
+const leader = countryCounts[0];
+const leaderShare = Math.round((leader.count / coverage.total) * 100);
+const maxCountry = countryCounts[0].count;
+const maxFamily = familyCounts[0].count;
+
+/** Part des acteurs situés hors des Mascareignes, parmi ceux dont le pays est connu. */
+const MASCAREIGNES = ["La Réunion", "Maurice", "Madagascar", "Seychelles", "Comores"];
+const withCountry = coverage.total - coverage.withoutCountry;
+const islandCount = countryCounts
+  .filter((c) => MASCAREIGNES.includes(c.country))
+  .reduce((sum, c) => sum + c.count, 0);
+const outsideIslandsShare = Math.round(((withCountry - islandCount) / withCountry) * 100);
+
+/**
+ * Les manques, tels quels. Chaque ligne est un défaut de la source qu'un
+ * annuaire ordinaire retrancherait de son total sans le dire.
+ */
+const blindSpots = [
+  {
+    value: coverage.unlocated,
+    label: "sans coordonnées",
+    body: "Aucune latitude, aucune longitude. Ces acteurs existent dans le recensement mais ne peuvent être placés nulle part : ils ne sont sur aucune carte, y compris la nôtre.",
+  },
+  {
+    value: coverage.withoutCountry,
+    label: "sans pays",
+    body: `L'adresse est vide ou trop partielle pour rattacher la fiche à un pays. Le classement territorial porte donc sur ${nf.format(withCountry)} acteurs, pas sur ${nf.format(coverage.total)}.`,
+  },
+  {
+    value: coverage.unclassified,
+    label: "sans famille",
+    body: "La typologie n'a pas été renseignée, ou l'a été avec une valeur hors référentiel. Ces acteurs n'apparaissent dans aucune des huit familles.",
+  },
+  {
+    value: coverage.offFrame,
+    label: "hors cadre",
+    body: "Un acteur géolocalisé à Nantes, à 47° nord. La fenêtre de la carte s'arrête à 31° nord : il est compté partout ailleurs, mais aucun point ne le représente.",
+  },
+];
+---
+
+<Layout title="Babouk — les acteurs cyber de l'océan Indien">
+  <Navbar />
+
+  {/* ================================ HÉROS ================================ */}
+  <section id="contenu" class="relative flex min-h-dvh flex-col overflow-hidden">
+    {/*
+      La fenêtre couvre 148° de longitude pour un ratio de 1,9:1, plus large que
+      n'importe quel écran. Trois compositions ont été essayées avant celle-ci :
+      remplir le cadre en rognant supprimait soit l'Afrique de l'Est (159
+      acteurs), soit la côte australienne (92) ; un voile dégradé éteignait les
+      foyers africains en laissant les australiens intacts, donnant à lire une
+      hiérarchie que les données démentent ; un panneau opaque posé sur la carte
+      masquait tout le bassin et ne laissait visible que l'Indonésie et le
+      Pacifique, où il n'y a aucun acteur.
+
+      À partir de `lg`, la carte occupe donc son propre champ à droite, entière
+      et sans rien au-dessus. Elle est plus petite qu'un fond perdu, et c'est le
+      prix pour que les treize pays soient tous là.
+    */}
+    {/* Sous `lg`, la carte n'a plus de colonne à elle : elle passe en fond.
+        Le débordement latéral est limité à 12 % de chaque côté — au-delà, la
+        bande gagnait en hauteur mais l'écran ne gardait plus que son tiers
+        central, amputant l'Australie et l'Afrique du Sud, c'est-à-dire les deux
+        extrémités que le sous-titre annonce deux lignes plus haut. */}
+    <div
+      class="absolute -inset-x-[12%] inset-y-[6%] flex items-center lg:inset-x-auto lg:inset-y-0 lg:bottom-28 lg:left-[37%] lg:right-0 lg:top-24"
+    >
+      <MapOceanIndien />
+    </div>
+
+    {/* Fondu du bord gauche de la carte : la coupe franche contre la colonne de
+        titre lirait comme un défaut de cadrage. */}
+    <div
+      class="pointer-events-none absolute inset-y-0 left-[37%] hidden w-24 lg:block"
+      style="background:linear-gradient(to right,#0f1a30,transparent)"
+      aria-hidden="true"
+    >
+    </div>
+
+    {/* Sous `lg`, la carte repasse en fond plein cadre et le voile la recule
+        derrière le texte, qui occupe alors toute la largeur. */}
+    <div
+      class="pointer-events-none absolute inset-0 lg:hidden"
+      style="background:linear-gradient(to bottom,rgba(15,26,48,0.88) 0%,rgba(15,26,48,0.55) 42%,rgba(15,26,48,0.62) 62%,rgba(15,26,48,0.9) 86%,#0f1a30 100%)"
+      aria-hidden="true"
+    >
+    </div>
+    <div
+      class="pointer-events-none absolute inset-x-0 bottom-0 h-40"
+      style="background:linear-gradient(to bottom,transparent,rgba(15,26,48,0.92))"
+      aria-hidden="true"
+    >
+    </div>
+
+    <div class="cyber-grid pointer-events-none absolute inset-0 opacity-60" aria-hidden="true"></div>
+    <div class="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+      <div class="animate-scan absolute inset-x-0 h-px bg-gold/20"></div>
+    </div>
+    <div
+      class="animate-pulse-glow pointer-events-none absolute -left-40 top-1/3 h-96 w-96 rounded-full bg-navy"
+      aria-hidden="true"
+    >
+    </div>
+
+    <div class="relative z-10 mx-auto flex w-full max-w-7xl flex-1 items-center px-6 pb-14 pt-24 sm:pb-20 lg:pb-28 lg:pt-28">
+      <div class="max-w-xl lg:max-w-[30rem]">
+        {/* Pas de pastille au-dessus du titre : elle redisait « Océan Indien »,
+            qui est la troisième ligne du H1, et « recensement », qui est le
+            libellé du bouton. Le titre porte son poids seul. */}
+        <h1
+          class="font-display font-bold leading-[0.92] tracking-[-0.03em]"
+          style="animation:slide-up .8s cubic-bezier(.16,1,.3,1) both"
+        >
+          <span class="block text-[clamp(2.5rem,6.5vw,4.25rem)] text-white">Une filière</span>
+          <span class="block text-[clamp(2.5rem,6.5vw,4.25rem)] text-gold">sans capitale</span>
+          <span
+            class="outline-word mt-4 block text-[clamp(1rem,2.6vw,1.75rem)] font-medium tracking-[0.24em]"
+          >
+            OCÉAN INDIEN
+          </span>
+        </h1>
+
+        <p
+          class="mt-8 max-w-xl text-lg leading-relaxed text-white/70"
+          style="animation:slide-up .8s cubic-bezier(.16,1,.3,1) .15s both"
+        >
+          <strong class="font-semibold text-white">{nf.format(coverage.total)} acteurs</strong> de la
+          cybersécurité recensés dans <strong class="font-semibold text-white">{coverage.countries} pays</strong>,
+          de l'Afrique de l'Est à l'Australie. Le premier d'entre eux — {leader.country},
+          avec {leader.count} — n'en rassemble que {leaderShare}&nbsp;%.
+        </p>
+
+        <div
+          class="mt-9 flex flex-col items-start gap-4 sm:flex-row sm:items-center"
+          style="animation:slide-up .8s cubic-bezier(.16,1,.3,1) .3s both"
+        >
+          <a href="/acteurs.csv" download class="btn-primary">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+            </svg>
+            Télécharger le recensement
+          </a>
+          <span class="btn-soon">
+            Annuaire
+            <span class="badge-soon">bientôt</span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    {/* Rail de relevés : la ligne d'instruments du poste, pas une rangée de
+        cartes statistiques. Collée au bas du cadre, pleine largeur. */}
+    <div class="relative z-10 border-t border-white/[0.08] bg-navy-dark/70 backdrop-blur-md">
+      <div class="mx-auto max-w-7xl px-6">
+        {/* En deux colonnes, l'élément 2 ouvre la seconde rangée : il ne porte
+            donc pas de filet à gauche, que la grille à quatre colonnes lui rend. */}
+        <dl class="grid grid-cols-2 gap-y-1 sm:grid-cols-4 sm:gap-y-0">
+          {readouts.map((item, i) => (
+            <div
+              class:list={[
+                "py-4 sm:py-6",
+                i > 0 && "border-l border-white/[0.06] pl-5 sm:pl-6",
+                i === 2 && "border-l-0 pl-0 sm:border-l sm:pl-6",
+              ]}
+            >
+              <dd class="readout text-2xl text-white sm:text-3xl">{item.value}</dd>
+              <dt class="meta mt-1.5 text-white/55 sm:mt-2">{item.label}</dt>
+            </div>
+          ))}
+        </dl>
+
+        {/* Légende de l'instrument. Elle est ici, contre la carte, et non dans
+            la section « Familles » trois écrans plus bas : là-bas, survoler une
+            famille pour l'isoler visait une carte hors champ.
+
+            La réserve sur les arcs passe en premier et hors du défilement
+            horizontal : sur téléphone la rangée de chips déborde, et une
+            mention posée à sa fin sortait du premier écran — soit exactement
+            l'endroit où elle doit être lue. */}
+        <div
+          class="flex flex-col gap-2 border-t border-white/[0.06] py-3.5 lg:flex-row-reverse lg:items-center lg:justify-between lg:gap-6"
+        >
+          <p class="meta shrink-0 whitespace-nowrap text-white/50">Arcs illustratifs</p>
+
+          {/* Le dégradé de droite signale que la rangée continue hors champ. */}
+          <div class="relative min-w-0 flex-1">
+            <ul class="flex items-center gap-x-4 overflow-x-auto pr-8 lg:flex-wrap lg:gap-y-2 lg:overflow-visible lg:pr-0">
+              {familyCounts.map((family) => (
+                <li>
+                  <button
+                    type="button"
+                    class="meta group/chip flex items-center gap-1.5 whitespace-nowrap py-0.5 text-white/55 transition-colors hover:text-white focus-visible:text-white"
+                    data-family-chip={family.slug}
+                  >
+                    <span
+                      class="h-2 w-2 shrink-0 rounded-full transition-transform group-hover/chip:scale-125"
+                      style={`background:${family.color}`}
+                      aria-hidden="true"
+                    >
+                    </span>
+                    {family.short}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div
+              class="pointer-events-none absolute inset-y-0 right-0 w-10 lg:hidden"
+              style="background:linear-gradient(to right,transparent,#101c33)"
+              aria-hidden="true"
+            >
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {/* =============================== FAMILLES =============================== */}
+  <section id="familles" class="noise-overlay relative overflow-hidden py-28 md:py-32">
+    <div class="relative z-10 mx-auto max-w-7xl px-6">
+      <div class="reveal mb-14 max-w-3xl">
+        <span class="section-label">01 // Familles</span>
+        <h2 class="section-title mt-5">
+          Huit familles, <span class="text-gold">très inégales</span>
+        </h2>
+        <p class="mt-5 max-w-2xl text-lg leading-relaxed text-white/60">
+          Le référentiel distingue huit types d'acteurs. Les entreprises en absorbent
+          {" "}{Math.round((maxFamily / coverage.classified) * 100)}&nbsp;%, quand les structures
+          d'accompagnement et les associations tiennent à elles deux dans un effectif à un
+          chiffre.
+        </p>
+      </div>
+
+      {/* La surface de chaque carte suit l'effectif : les entreprises occupent
+          le quart de la grille parce qu'elles sont les deux tiers du classement.
+          Une grille régulière donnerait huit familles d'égale importance — ce
+          que les données démentent.
+
+          Le compte tombe juste : sur quatre colonnes, 2×2 pour la première
+          famille, 2×1 pour la deuxième et six cases simples remplissent
+          exactement trois rangées. Sans la seconde carte large, la grille
+          laisserait un trou en bas à droite. */}
+      <ul class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        {familyCounts.map((family, i) => {
+          const share = Math.round((family.count / coverage.classified) * 100);
+          const lead = i === 0;
+          return (
+            <li
+              class:list={[
+                "accent-card panel reveal p-5 sm:p-6",
+                lead && "col-span-2 row-span-2",
+                i === 1 && "sm:col-span-2 lg:col-span-2",
+                `delay-${Math.min(6, i + 1)}`,
+              ]}
+              style={`--accent:${family.color}`}
+            >
+              <div class="flex h-full flex-col">
+                <div class="flex items-start justify-between gap-3">
+                  <span class="readout text-3xl sm:text-4xl" style={`color:${family.color}`}>
+                    {family.count}
+                  </span>
+                  <span class="meta shrink-0 pt-1.5 text-white/55">{share}&nbsp;%</span>
+                </div>
+
+                <h3
+                  class:list={[
+                    "mt-4 font-display font-semibold leading-tight text-white",
+                    lead ? "text-xl sm:text-2xl" : "text-base",
+                  ]}
+                >
+                  {family.short}
+                </h3>
+
+                {lead && (
+                  <p class="mt-4 max-w-sm text-sm leading-relaxed text-white/55">
+                    Prestataires, éditeurs et intégrateurs. La famille la plus nombreuse et la
+                    plus hétérogène du recensement : du cabinet d'audit d'une personne à la
+                    filiale régionale d'un groupe international.
+                  </p>
+                )}
+
+                <div class="mt-auto pt-6">
+                  <div class="h-1 w-full overflow-hidden rounded-full bg-white/[0.07]">
+                    <div
+                      class="h-full rounded-full"
+                      style={`width:${Math.max(2, share)}%;background:${family.color}`}
+                    >
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      <p class="reveal delay-2 mt-8 max-w-2xl text-sm leading-relaxed text-white/55">
+        {coverage.assignments} assignations pour {coverage.classified} acteurs classés&nbsp;:
+        {" "}{coverage.multiFamily} relèvent de plusieurs familles à la fois. La somme des
+        effectifs ci-dessus dépasse donc le total, et c'est normal.
+      </p>
+    </div>
+  </section>
+
+  {/* ============================== TERRITOIRE ============================== */}
+  <section id="territoire" class="relative overflow-hidden py-28 md:py-32">
+    <div
+      class="absolute inset-0"
+      style="background:linear-gradient(to bottom,#0f1a30,#192842,#0f1a30)"
+      aria-hidden="true"
+    >
+    </div>
+
+    <div class="relative z-10 mx-auto max-w-7xl px-6">
+      <div class="reveal mb-14 max-w-3xl">
+        <span class="section-label">02 // Territoire</span>
+        <h2 class="section-title mt-5">
+          Treize pays, <span class="text-gold">un seul bassin</span>
+        </h2>
+      </div>
+
+      <div class="grid gap-14 lg:grid-cols-12 lg:gap-16">
+        <div class="lg:col-span-7">
+          {/* Deux colonnes à partir de `sm` : treize lignes en pile faisaient
+              une liste deux fois plus haute que l'exergue d'en face, et la
+              colonne droite se vidait à partir du septième pays.
+
+              Remplissage par colonne (`grid-flow-col` sur sept rangées) et non
+              par rangée : un classement se lit de haut en bas, 1 à 7 puis 8 à
+              13, pas en serpentin 1-2 / 3-4. */}
+          <ol class="grid gap-x-10 gap-y-3.5 sm:grid-flow-col sm:grid-cols-2 sm:grid-rows-7 lg:gap-x-8">
+            {countryCounts.map((entry, i) => (
+              <li class:list={["reveal-left flex items-center gap-4", `delay-${Math.min(6, i + 1)}`]}>
+                <span class="meta w-5 shrink-0 text-right text-white/50">{i + 1}</span>
+                <span class="w-28 shrink-0 truncate font-display text-sm font-medium text-white/85 sm:w-32 sm:text-base">
+                  {entry.country}
+                </span>
+                {/* Barres en rouge de charte, pas en or : le §2 du document
+                    d'ADN attribue nommément les barres d'accent au rouge et
+                    réserve l'or à ce qui doit attirer l'œil. Treize barres
+                    dorées faisaient de l'accent la couleur dominante de la
+                    section. L'opacité décroît avec le rang. */}
+                <span class="h-2 flex-1 overflow-hidden rounded-full bg-white/[0.05]">
+                  <span
+                    class="block h-full rounded-full bg-clusir-red"
+                    style={`width:${Math.round((entry.count / maxCountry) * 100)}%;opacity:${(1 - i * 0.045).toFixed(2)}`}
+                  >
+                  </span>
+                </span>
+                <span class="readout w-9 shrink-0 text-right text-sm text-white/80">{entry.count}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        <div class="lg:col-span-5">
+          {/* Collée en haut : la liste des treize pays est deux fois plus haute
+              que l'exergue, et sans cela la colonne droite se vide dès le
+              septième pays. */}
+          <figure class="reveal-right panel p-8 lg:sticky lg:top-28">
+            <blockquote class="font-editorial text-2xl leading-snug text-white sm:text-3xl">
+              « Océan Indien » fait penser aux Mascareignes. Le recensement dit autre chose :
+              La&nbsp;Réunion arrive sixième.
+            </blockquote>
+            <figcaption class="mt-7 border-t border-white/[0.08] pt-5 text-sm leading-relaxed text-white/55">
+              {leader.country} ({leader.count}), {countryCounts[1].country} ({countryCounts[1].count})
+              et {countryCounts[2].country} ({countryCounts[2].count}) devancent à eux seuls
+              l'ensemble des îles. Cadrer la carte sur les Mascareignes laisserait
+              {" "}{outsideIslandsShare}&nbsp;% des acteurs dont le pays est connu hors du champ —
+              c'est pourquoi celle du haut de page va de l'Afrique du Sud à l'Australie.
+            </figcaption>
+          </figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {/* ============================= ANGLES MORTS ============================= */}
+  <section id="angles-morts" class="noise-overlay relative overflow-hidden py-28 md:py-32">
+    <div class="relative z-10 mx-auto max-w-7xl px-6">
+      <div class="reveal mb-14 max-w-3xl">
+        <span class="section-label">03 // Angles morts</span>
+        <h2 class="section-title mt-5">
+          Ce que le recensement <span class="text-gold">ne sait pas</span>
+        </h2>
+        <p class="mt-5 max-w-2xl text-lg leading-relaxed text-white/60">
+          Un annuaire de filière qui masque ses trous ment sur la filière. Voici les nôtres,
+          comptés sur les données mêmes qui alimentent le reste de cette page.
+        </p>
+      </div>
+
+      <ul class="grid gap-4 sm:grid-cols-2">
+        {blindSpots.map((spot, i) => (
+          <li
+            class:list={["panel accent-card reveal p-6 sm:p-8", `delay-${Math.min(6, i + 1)}`]}
+            style="--accent:#e56b5f"
+          >
+            <div class="flex items-baseline gap-4">
+              <span class="readout text-4xl text-clusir-red-bright sm:text-5xl">{spot.value}</span>
+              <span class="meta text-white/50">{spot.label}</span>
+            </div>
+            <p class="mt-4 max-w-prose text-sm leading-relaxed text-white/60">{spot.body}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  {/* ================================ SOURCE ================================ */}
+  <section id="source" class="relative overflow-hidden py-28 md:py-32">
+    <div
+      class="absolute inset-0"
+      style="background:linear-gradient(to bottom,#0f1a30,#192842)"
+      aria-hidden="true"
+    >
+    </div>
+
+    {/* Même gouttière que les sections 01 à 03 : en `max-w-4xl`, le bord gauche
+        du texte décrochait de 192 px sur la dernière section. */}
+    <div class="relative z-10 mx-auto max-w-7xl px-6">
+      <div class="reveal">
+        <span class="section-label">04 // Source</span>
+        <h2 class="section-title mt-5">Vérifiez par vous-même</h2>
+        <p class="mt-6 max-w-2xl text-lg leading-relaxed text-white/65">
+          Chaque chiffre de cette page est calculé à la publication à partir d'un seul fichier,
+          que vous pouvez télécharger. Rien n'est saisi à la main, rien n'est estimé, rien n'est
+          complété.
+        </p>
+      </div>
+
+      <dl
+        class="reveal delay-2 mt-12 grid max-w-4xl gap-px overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.07] sm:grid-cols-2"
+      >
+        <div class="bg-navy-dark p-6">
+          <dt class="meta text-white/55">Origine</dt>
+          <dd class="mt-2.5 text-sm leading-relaxed text-white/75">
+            Annuaire Communecter de l'EDIH La Réunion, exporté via l'API publique de la
+            plateforme.
+          </dd>
+        </div>
+        <div class="bg-navy-dark p-6">
+          <dt class="meta text-white/55">Dernière mise à jour</dt>
+          <dd class="mt-2.5 text-sm leading-relaxed text-white/75">{updated}</dd>
+        </div>
+        <div class="bg-navy-dark p-6">
+          <dt class="meta text-white/55">Format</dt>
+          <dd class="mt-2.5 text-sm leading-relaxed text-white/75">
+            CSV, {nf.format(coverage.total)} lignes, 30 colonnes, UTF-8.
+          </dd>
+        </div>
+        <div class="bg-navy-dark p-6">
+          <dt class="meta text-white/55">Réserve</dt>
+          <dd class="mt-2.5 text-sm leading-relaxed text-white/75">
+            Les arcs de la carte sont illustratifs : aucune relation entre acteurs n'est
+            documentée dans la source.
+          </dd>
+        </div>
+      </dl>
+
+      <div class="reveal delay-3 mt-10">
+        <a href="/acteurs.csv" download class="btn-primary">
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+          </svg>
+          acteurs.csv
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <Footer />
+</Layout>
+
+<script>
+  // Isolement d'une famille sur la carte du héros. La légende pose un attribut
+  // sur le conteneur de la carte ; tout le rendu est en CSS, dans le composant.
+  // Aucun style n'est écrit sur les 55 foyers.
+  const map = document.querySelector<SVGElement>("#contenu .map")?.parentElement;
+
+  if (map) {
+    for (const chip of document.querySelectorAll<HTMLElement>("[data-family-chip]")) {
+      const slug = chip.dataset.familyChip!;
+      const isolate = () => map.setAttribute("data-isolate", slug);
+      const release = () => map.removeAttribute("data-isolate");
+      chip.addEventListener("pointerenter", isolate);
+      chip.addEventListener("pointerleave", release);
+      chip.addEventListener("focusin", isolate);
+      chip.addEventListener("focusout", release);
+    }
+  }
+</script>
