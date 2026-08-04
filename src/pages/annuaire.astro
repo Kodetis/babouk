@@ -1,0 +1,725 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Navbar from "../components/Navbar.astro";
+import Footer from "../components/Footer.astro";
+import { directory, familyFacets, countryFacets, coverage } from "../lib/data.js";
+import { asset } from "../lib/url.js";
+
+const nf = new Intl.NumberFormat("fr-FR");
+
+/**
+ * Chaque ligne porte trois attributs de filtrage, calculés au build : les slugs
+ * de ses familles, son pays, et son index de recherche déjà replié. Le client
+ * ne fait qu'un `includes` et deux comparaisons de chaînes par ligne — 685
+ * itérations par frappe, sans allocation, sans reflow avant la fin de la boucle.
+ */
+const rows = directory.map((a) => ({
+  ...a,
+  fams: a.families.length ? a.families.map((f) => f.slug).join(" ") : "sans-famille",
+  // Domaines et spécialités se recouvrent largement dans la source : les
+  // spécialités sont souvent une reprise du domaine. Un seul jeu d'étiquettes.
+  tags: [...new Set([...a.domaines, ...a.specialites])],
+}));
+
+/**
+ * Repères alphabétiques. 685 lignes annoncées « dans l'ordre alphabétique »
+ * sans ancre, c'est 76 écrans de défilement où l'ordre ne sert à rien. Chaque
+ * changement d'initiale ouvre un en-tête collant ; les noms qui commencent par
+ * un chiffre ou un signe sont regroupés sous « # » plutôt que rangés sous une
+ * lettre qu'ils n'ont pas.
+ */
+const initiale = (nom) => {
+  const c = nom.normalize("NFD").replace(/\p{Diacritic}/gu, "").toUpperCase()[0] ?? "#";
+  return /[A-Z]/.test(c) ? c : "#";
+};
+
+type Item =
+  | { kind: "lettre"; lettre: string }
+  | { kind: "ligne"; a: (typeof rows)[number] };
+
+const items: Item[] = [];
+let lettreCourante = "";
+for (const a of rows) {
+  const l = initiale(a.name);
+  if (l !== lettreCourante) {
+    lettreCourante = l;
+    items.push({ kind: "lettre", lettre: l });
+  }
+  items.push({ kind: "ligne", a });
+}
+
+/** Contrat de direction de cette page. Injecté dans le corps par le gabarit. */
+const CONTRACT = `<!--
+      THESIS: Un instrument de recherche, pas une galerie de fiches. Refuse la
+      grille de 685 cartes identiques : une liste dense a filet unique, ou la
+      couleur ne nomme qu'une chose, la famille.
+      OWN-WORLD: celui de la landing, inchange. Fond #0f1a30, surfaces blanc
+      3 % sur bordure blanc 6 %, pastille de famille de 8 px, JetBrains Mono
+      pour tout effectif, or reserve au focus et au chevron survole.
+      STORY: Le visiteur cherche un nom, une ville ou un domaine, restreint par
+      famille et par pays, deplie la ligne, et repart vers le site de l'acteur
+      ou vers sa fiche source.
+      FIRST VIEWPORT: Titre en deux lignes et chapo, puis la barre de recherche
+      pleine largeur collee sous la nav, son compteur monospace a droite. En
+      dessous, rail de facettes a gauche et liste alphabetique a droite.
+      FORM: Rail de facettes plus liste depliante. Extension d'un monde etabli,
+      sans tirage de direction.
+      FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+    -->`;
+---
+
+<Layout
+  title="Annuaire — les 685 acteurs cyber de l'océan Indien | Babouk"
+  description={`Les ${coverage.total} acteurs de la cybersécurité de la zone Océan Indien, un par un. Recherche par nom, ville ou domaine, filtrage par famille et par pays.`}
+  contract={CONTRACT}
+>
+  <Navbar />
+
+  <main id="contenu" class="pt-28 sm:pt-32">
+    {/* ============================== EN-TÊTE ============================== */}
+    <header class="mx-auto max-w-7xl px-6">
+      <h1 class="font-display font-bold leading-[0.95] tracking-[-0.02em]">
+        <span class="block text-[clamp(2.25rem,5.5vw,3.5rem)] text-white">Le recensement,</span>
+        <span class="block text-[clamp(2.25rem,5.5vw,3.5rem)] text-gold">ligne à ligne</span>
+      </h1>
+
+      <p class="mt-6 max-w-2xl text-lg leading-relaxed text-white/70">
+        Les {nf.format(coverage.total)} acteurs, un par un. Cherchez un nom, une ville ou un domaine ;
+        filtrez par famille et par pays ; dépliez une ligne pour lire sa fiche.
+        Les {coverage.unclassified} acteurs sans famille et les {coverage.withoutCountry} sans pays
+        sont dans la liste — ils ne sont pas retranchés du total.
+      </p>
+    </header>
+
+    {/* =========================== BARRE DE RECHERCHE ===========================
+        Collée sous la barre de navigation. C'est l'action principale de la page :
+        elle reste atteignable après 600 lignes de défilement, sinon chercher un
+        second acteur demande de remonter toute la liste. */}
+    <div
+      data-console
+      class="sticky top-20 z-40 mt-10 border-y border-white/[0.06] bg-navy-dark/95 py-4 backdrop-blur-md"
+    >
+      <div class="mx-auto flex max-w-7xl flex-col gap-3 px-6 sm:flex-row sm:items-center sm:gap-6">
+        <div class="relative flex-1">
+          <label for="recherche" class="sr-only">Chercher un acteur</label>
+          <svg
+            class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/50"
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path stroke-linecap="round" d="m20 20-3.5-3.5" />
+          </svg>
+          <input
+            id="recherche"
+            type="search"
+            class="search-field"
+            placeholder="Nom, ville, pays, domaine…"
+            autocomplete="off"
+            spellcheck="false"
+            aria-describedby="compteur"
+          />
+          {/* Bouton d'effacement maison : le `×` natif de `type="search"` n'existe
+              que sous WebKit et ne déclenche pas d'`input` partout. */}
+          <button
+            id="effacer"
+            type="button"
+            class="absolute right-2 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-lg text-white/50 transition-colors hover:text-white"
+            aria-label="Effacer la recherche"
+          >
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Le compteur visible n'est pas la région vocale : annoncé à chaque
+            frappe, il ne dirait qu'un nombre nu. L'annonce part d'une région
+            dédiée, en phrase complète et temporisée. */}
+        <p id="compteur" class="flex shrink-0 items-baseline gap-2">
+          <span id="compteur-valeur" class="readout text-2xl text-white">{nf.format(coverage.total)}</span>
+          <span class="meta text-white/55">sur {nf.format(coverage.total)} acteurs</span>
+        </p>
+        <p id="annonce" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+      </div>
+    </div>
+
+    {/* ============================== CORPS ============================== */}
+    <div class="mx-auto grid max-w-7xl gap-8 px-6 pb-24 pt-8 lg:grid-cols-[16rem_1fr] lg:gap-12">
+      {/* --------------------------- RAIL DE FILTRES ---------------------------
+          Rendu ouvert par le serveur : sans JavaScript, les filtres restent
+          lisibles et le classement par effectif reste consultable. Un script
+          replie le panneau sous `lg`, où il pousserait la liste hors de l'écran. */}
+      {/* Le rail est plus haut que la fenêtre : collé sans borne, sa fin — les
+          plus petits pays et l'action de remise à zéro — devient inatteignable.
+          Il défile donc dans son propre champ. */}
+      <details
+        id="filtres"
+        open
+        class="lg:sticky lg:top-44 lg:h-fit lg:max-h-[calc(100dvh-13rem)] lg:overflow-y-auto lg:pr-3"
+      >
+        <summary
+          class="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3.5 lg:hidden"
+        >
+          <span class="meta text-white/70">Filtres</span>
+          <span class="flex min-w-0 items-center gap-3">
+            {/* Replié, le panneau doit dire ce qu'il retient : sinon la liste
+                raccourcit sans cause visible. */}
+            <span id="filtres-resume" class="meta truncate text-gold"></span>
+            <svg class="actor-chevron h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m9 6 6 6-6 6" />
+            </svg>
+          </span>
+        </summary>
+
+        <div class="mt-4 space-y-8 lg:mt-0">
+          <section aria-labelledby="titre-familles">
+            <div class="flex items-baseline justify-between gap-3">
+              <h2 id="titre-familles" class="meta text-white/70">Famille</h2>
+              <span class="meta text-white/50">effectif</span>
+            </div>
+            <div class="mt-3 -ml-0.5 flex flex-col gap-0.5">
+              {familyFacets.map((f) => (
+                <button
+                  type="button"
+                  class="facet"
+                  data-facet="famille"
+                  data-value={f.slug}
+                  aria-pressed="false"
+                  style={`--accent:${f.color}`}
+                >
+                  <span class="facet-dot" aria-hidden="true"></span>
+                  <span class="truncate text-sm">{f.label}</span>
+                  <span class="readout text-xs text-white/60" data-count>{nf.format(f.count)}</span>
+                </button>
+              ))}
+            </div>
+            <p class="mt-3 text-xs leading-relaxed text-white/55">
+              Les effectifs suivent la recherche en cours. {coverage.multiFamily} acteurs portent
+              plusieurs familles : leur somme dépasse le total.
+            </p>
+          </section>
+
+          <section aria-labelledby="titre-pays">
+            <div class="flex items-baseline justify-between gap-3">
+              <h2 id="titre-pays" class="meta text-white/70">Pays</h2>
+              <span class="meta text-white/50">effectif</span>
+            </div>
+            <div class="mt-3 -ml-0.5 flex flex-col gap-0.5">
+              {/* Sans pastille : la pastille nomme une famille. Quatorze
+                  disques blancs identiques ne nommeraient rien. */}
+              {countryFacets.map((c) => (
+                <button
+                  type="button"
+                  class="facet facet--plain"
+                  data-facet="pays"
+                  data-value={c.slug}
+                  aria-pressed="false"
+                >
+                  <span class="truncate text-sm">{c.label}</span>
+                  <span class="readout text-xs text-white/60" data-count>{nf.format(c.count)}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <button
+            id="reinitialiser"
+            type="button"
+            class="meta rounded-lg border border-white/[0.12] px-4 py-3 text-white/70 transition-colors hover:border-white/30 hover:text-white"
+          >
+            Réinitialiser
+          </button>
+        </div>
+      </details>
+
+      {/* ------------------------------ LA LISTE ------------------------------
+          `min-w-0` : sans lui, la colonne prend sa largeur min-content, que les
+          libellés monospace en `truncate` (donc insécables) portent à 870 px —
+          la page déborde alors horizontalement sur téléphone. */}
+      <div class="min-w-0">
+        <noscript>
+          <p class="panel mb-6 p-4 text-sm leading-relaxed text-white/70">
+            La recherche et les filtres demandent JavaScript. Les {nf.format(coverage.total)} acteurs
+            sont tous listés ci-dessous, dans l'ordre alphabétique, et
+            <a href={asset("acteurs.csv")} download class="text-clusir-red-bright underline underline-offset-2">
+              le fichier source est téléchargeable</a>.
+          </p>
+        </noscript>
+
+        <ul id="liste" class="border-t border-white/[0.06]">
+          {items.map((item) => {
+            if (item.kind === "lettre") return (
+              <li data-lettre class="lettre-rail">
+                <span class="meta text-gold/70">{item.lettre}</span>
+              </li>
+            );
+            const a = item.a;
+            return (
+            <li data-row data-f={a.fams} data-c={a.country} data-q={a.haystack}>
+              <details class="actor-row">
+                <summary>
+                  <span
+                    class="mt-[0.4rem] h-2 w-2 shrink-0 rounded-full"
+                    style={`background:${a.families[0]?.color ?? "rgba(255,255,255,0.45)"}`}
+                    aria-hidden="true"
+                  ></span>
+
+                  <span class="min-w-0 flex-1">
+                    <span class="block font-display text-base font-semibold leading-snug text-white">
+                      {a.name}
+                    </span>
+                    <span class="meta mt-1.5 block truncate text-white/55">
+                      {[
+                        a.families.length ? a.families.map((f) => f.short).join(" · ") : "Sans famille",
+                        [a.city, a.country].filter(Boolean).join(", ") || "Sans pays",
+                      ].join(" — ")}
+                    </span>
+                  </span>
+
+                  <svg
+                    class="actor-chevron mt-1 h-4 w-4 shrink-0"
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m9 6 6 6-6 6" />
+                  </svg>
+                </summary>
+
+                {/* Aligné sur le nom : pastille (0,5rem) + gouttière (0,875rem)
+                    + retrait du sommaire (0,75rem) = 2,125rem. */}
+                <div class="flex gap-4 px-3 pb-6 pl-[2.125rem] pt-1">
+                  {/* Pas de `src` au rendu, et pas de `loading="lazy"` : la
+                      tuile est masquée tant que l'image n'est pas peinte, et
+                      une image masquée n'entre jamais dans la fenêtre, donc une
+                      image paresseuse ne se chargerait jamais. L'URL est posée
+                      à l'ouverture de la fiche — plus tard encore que le
+                      chargement paresseux, et sans l'impasse. */}
+                  {a.logo && (
+                    <img
+                      data-src={a.logo}
+                      alt=""
+                      width="48"
+                      height="48"
+                      decoding="async"
+                      data-logo
+                      class="hidden h-12 w-12 shrink-0 rounded-lg border border-white/[0.06] bg-white/[0.04] object-contain p-1 sm:block"
+                    />
+                  )}
+
+                  <div class="min-w-0 flex-1">
+                    {a.description && (
+                      <p class="max-w-prose text-sm leading-relaxed text-white/70">{a.description}</p>
+                    )}
+
+                    {a.tags.length > 0 && (
+                      <div class:list={["flex flex-wrap gap-1.5", a.description && "mt-4"]}>
+                        {a.tags.map((tag) => <span class="tag">{tag}</span>)}
+                      </div>
+                    )}
+
+                    {/* Une fiche sans description ni domaine n'affiche pas un
+                        panneau vide : elle dit ce qu'elle n'a pas. */}
+                    {!a.description && a.tags.length === 0 && (
+                      <p class="text-sm leading-relaxed text-white/55">
+                        La source ne renseigne rien au-delà du nom, de la famille et de la
+                        localisation.
+                      </p>
+                    )}
+
+                    <div class="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+                      {a.web && (
+                        <a href={a.web} target="_blank" rel="noopener noreferrer" class="fiche-link">
+                          <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <circle cx="12" cy="12" r="9" />
+                            <path d="M3 12h18M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18Z" />
+                          </svg>
+                          <span class="truncate">{a.web.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}</span>
+                        </a>
+                      )}
+                      {a.email && (
+                        <a href={`mailto:${a.email}`} class="fiche-link">
+                          <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="3" y="5" width="18" height="14" rx="2" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m3 7 9 6 9-6" />
+                          </svg>
+                          <span class="truncate">{a.email}</span>
+                        </a>
+                      )}
+                      {a.phone && (
+                        <a href={`tel:${a.phone.replace(/\s/g, "")}`} class="fiche-link">
+                          <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1Z" />
+                          </svg>
+                          <span>{a.phone}</span>
+                        </a>
+                      )}
+                      {a.source && (
+                        <a href={a.source} target="_blank" rel="noopener noreferrer" class="fiche-link">
+                          <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
+                          </svg>
+                          <span>Fiche source</span>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </details>
+            </li>
+            );
+          })}
+        </ul>
+
+        {/* État vide. Le compteur affiche déjà « 0 sur 685 » à un écran de là :
+            inutile de le répéter en gros. Ce panneau nomme la contrainte qui a
+            réellement vidé la liste — recherche, famille, pays ou combinaison —
+            et propose d'abord la sortie la plus fine, puis la remise à zéro. */}
+        <div id="vide" class="hidden py-20 text-center">
+          <p id="vide-cause" class="mx-auto max-w-lg text-lg leading-relaxed text-white/70"></p>
+          <p class="mx-auto mt-2 max-w-md text-sm leading-relaxed text-white/55">
+            La recherche porte sur le nom, la ville, le pays, la description et les domaines —
+            pas sur le contenu des sites référencés.
+          </p>
+          <div class="mt-8 flex flex-wrap items-center justify-center gap-4">
+            <button type="button" id="vide-affiner" class="btn-outline hidden text-xs"></button>
+            <button type="button" data-reset class="meta rounded-lg border border-white/[0.12] px-4 py-3 text-white/70 transition-colors hover:border-white/30 hover:text-white">
+              Tout réafficher
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <Footer />
+</Layout>
+
+<script>
+  /**
+   * Filtrage local des 685 lignes.
+   *
+   * Tout est déjà dans le DOM : aucune requête, aucun rendu de gabarit à la
+   * frappe. Une passe met à jour `hidden` sur chaque ligne et recompte les deux
+   * jeux de facettes, puis une seule salve d'écritures met à jour le compteur,
+   * les effectifs et les en-têtes de lettre.
+   */
+  const liste = document.getElementById("liste");
+  const champ = document.getElementById("recherche") as HTMLInputElement | null;
+  const effacer = document.getElementById("effacer");
+  const compteur = document.getElementById("compteur-valeur");
+  const annonce = document.getElementById("annonce");
+  const vide = document.getElementById("vide");
+  const videCause = document.getElementById("vide-cause");
+  const videAffiner = document.getElementById("vide-affiner") as HTMLButtonElement | null;
+  const resume = document.getElementById("filtres-resume");
+  const panneau = document.getElementById("filtres") as HTMLDetailsElement | null;
+
+  if (liste && champ && compteur && vide) {
+    const lignes = Array.from(liste.querySelectorAll<HTMLElement>("[data-row]"));
+    const lettres = Array.from(liste.querySelectorAll<HTMLElement>("[data-lettre]"));
+    const enfants = Array.from(liste.children) as HTMLElement[];
+    const boutons = Array.from(document.querySelectorAll<HTMLElement>("[data-facet]"));
+    const nf = new Intl.NumberFormat("fr-FR");
+    const TOTAL = lignes.length;
+
+    // Les données de chaque ligne sont lues une fois : le `dataset` est un accès
+    // au DOM, et 685 lectures à chaque frappe suffisent à se voir.
+    const index = lignes.map((el) => ({
+      el,
+      q: el.dataset.q ?? "",
+      f: (el.dataset.f ?? "").split(" "),
+      c: el.dataset.c ?? "",
+    }));
+
+    const etat: { q: string; famille: string | null; pays: string | null } = {
+      q: "",
+      famille: null,
+      pays: null,
+    };
+
+    /** Même repli que celui appliqué au build : accents retirés, minuscules. */
+    const fold = (t: string) =>
+      t.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+
+    /** Libellé lisible d'une facette, pour les messages et le résumé replié. */
+    const libelle = (axe: string, valeur: string) => {
+      const b = boutons.find((x) => x.dataset.facet === axe && x.dataset.value === valeur);
+      return b?.querySelector("span:not(.facet-dot):not([data-count])")?.textContent?.trim() ?? valeur;
+    };
+
+    let minuteur: ReturnType<typeof setTimeout> | undefined;
+
+    function appliquer() {
+      let visibles = 0;
+      // Un effectif de facette doit décrire ce qu'on regarde, pas le fichier
+      // entier : chaque axe se recompte sous la contrainte des *autres* axes,
+      // sinon cocher « Inde » laisserait « Entreprises 420 » affiché.
+      const parFamille = new Map<string, number>();
+      const parPays = new Map<string, number>();
+
+      for (const item of index) {
+        const okQ = etat.q === "" || item.q.includes(etat.q);
+        const okF = etat.famille === null || item.f.includes(etat.famille);
+        const okC = etat.pays === null || item.c === etat.pays;
+
+        if (okQ && okC) for (const f of item.f) parFamille.set(f, (parFamille.get(f) ?? 0) + 1);
+        if (okQ && okF) parPays.set(item.c, (parPays.get(item.c) ?? 0) + 1);
+
+        const ok = okQ && okF && okC;
+        // `hidden` plutôt qu'une classe : l'élément sort aussi de l'arbre
+        // d'accessibilité, donc du parcours au clavier et de la liste lue par
+        // un lecteur d'écran. Une ligne masquée mais focusable est un piège.
+        if (item.el.hidden !== !ok) item.el.hidden = !ok;
+        if (ok) visibles++;
+      }
+
+      for (const bouton of boutons) {
+        const cible = bouton.querySelector("[data-count]");
+        if (!cible) continue;
+        const axe = bouton.dataset.facet;
+        const valeur = bouton.dataset.value ?? "";
+        const n = axe === "famille" ? parFamille.get(valeur) ?? 0 : parPays.get(valeur) ?? 0;
+        cible.textContent = nf.format(n);
+        // Une facette à zéro reste lisible et cliquable — elle dit « rien ici »,
+        // ce qui est une information ; elle ne disparaît pas sous la main.
+        bouton.classList.toggle("facet--vide", n === 0 && bouton.getAttribute("aria-pressed") !== "true");
+      }
+
+      // Un en-tête de lettre ne survit qu'à condition qu'une ligne le suive.
+      let enCours: HTMLElement | null = null;
+      let peuplee = false;
+      for (const enfant of enfants) {
+        if (enfant.hasAttribute("data-lettre")) {
+          if (enCours) enCours.hidden = !peuplee;
+          enCours = enfant;
+          peuplee = false;
+        } else if (!enfant.hidden) peuplee = true;
+      }
+      if (enCours) enCours.hidden = !peuplee;
+
+      compteur!.textContent = nf.format(visibles);
+      vide!.classList.toggle("hidden", visibles > 0);
+      liste!.classList.toggle("hidden", visibles === 0);
+      effacer?.classList.toggle("flex", champ!.value !== "");
+      effacer?.classList.toggle("hidden", champ!.value === "");
+
+      // Contraintes actives, dans l'ordre où l'utilisateur les a posées.
+      const contraintes: string[] = [];
+      if (etat.q) contraintes.push(`« ${champ!.value.trim()} »`);
+      if (etat.famille !== null) contraintes.push(libelle("famille", etat.famille));
+      if (etat.pays !== null) contraintes.push(libelle("pays", etat.pays));
+
+      if (resume) resume.textContent = contraintes.length ? contraintes.join(" · ") : "";
+
+      if (videCause) {
+        videCause.textContent = contraintes.length
+          ? `Aucun acteur ne réunit ${contraintes.join(", ")}.`
+          : "Aucun acteur à afficher.";
+      }
+
+      // Sortie la plus fine : si plusieurs contraintes sont posées, on propose
+      // de relâcher la dernière plutôt que de tout remettre à zéro.
+      if (videAffiner) {
+        const relacher =
+          etat.pays !== null ? ("pays" as const) : etat.famille !== null ? ("famille" as const) : null;
+        if (contraintes.length > 1 && relacher) {
+          videAffiner.textContent = `Retirer ${libelle(relacher, etat[relacher]!)}`;
+          videAffiner.classList.remove("hidden");
+          videAffiner.dataset.relacher = relacher;
+        } else {
+          videAffiner.classList.add("hidden");
+          delete videAffiner.dataset.relacher;
+        }
+      }
+
+      // Annonce vocale : une phrase entière, et temporisée — sinon un lecteur
+      // d'écran récite un nombre nu à chaque caractère frappé.
+      if (annonce) {
+        clearTimeout(minuteur);
+        minuteur = setTimeout(() => {
+          annonce.textContent =
+            visibles === 0
+              ? `Aucun acteur sur ${nf.format(TOTAL)}.`
+              : `${nf.format(visibles)} acteur${visibles > 1 ? "s" : ""} sur ${nf.format(TOTAL)}.`;
+        }, 500);
+      }
+
+      ecrireUrl();
+    }
+
+    /* ------------------------------------------------------------------ URL */
+
+    /**
+     * L'état de recherche vit dans l'URL : une liste filtrée se partage, se met
+     * en favori et survit au rechargement comme au bouton Précédent. Sur une
+     * page dont le livrable *est* le résultat filtré, c'est le minimum.
+     * `replaceState` et non `pushState` : une frappe n'est pas une navigation.
+     */
+    function ecrireUrl() {
+      const p = new URLSearchParams();
+      if (champ!.value.trim()) p.set("q", champ!.value.trim());
+      if (etat.famille !== null) p.set("famille", etat.famille);
+      if (etat.pays !== null) p.set("pays", etat.pays);
+      const suffixe = p.toString();
+      history.replaceState(null, "", suffixe ? `?${suffixe}` : location.pathname);
+    }
+
+    function lireUrl() {
+      const p = new URLSearchParams(location.search);
+      champ!.value = p.get("q") ?? "";
+      etat.q = fold(champ!.value.trim());
+      etat.famille = p.has("famille") ? p.get("famille") : null;
+      etat.pays = p.has("pays") ? p.get("pays") : null;
+      // Une valeur inconnue dans l'URL ne doit pas vider la page en silence.
+      for (const axe of ["famille", "pays"] as const) {
+        const v = etat[axe];
+        if (v !== null && !boutons.some((b) => b.dataset.facet === axe && b.dataset.value === v)) {
+          etat[axe] = null;
+        }
+      }
+      refletFacettes();
+    }
+
+    function refletFacettes() {
+      for (const bouton of boutons) {
+        const axe = bouton.dataset.facet as "famille" | "pays";
+        bouton.setAttribute("aria-pressed", String(etat[axe] === (bouton.dataset.value ?? "")));
+      }
+    }
+
+    /* -------------------------------------------------------------- écoutes */
+
+    champ.addEventListener("input", () => {
+      etat.q = fold(champ.value.trim());
+      appliquer();
+    });
+
+    effacer?.addEventListener("click", () => {
+      champ.value = "";
+      etat.q = "";
+      appliquer();
+      champ.focus();
+    });
+
+    for (const bouton of boutons) {
+      bouton.addEventListener("click", () => {
+        const axe = bouton.dataset.facet as "famille" | "pays";
+        const valeur = bouton.dataset.value ?? "";
+        // Un second clic sur la facette active la relâche : c'est le seul geste
+        // de retour disponible sans ajouter un bouton par ligne.
+        etat[axe] = etat[axe] === valeur ? null : valeur;
+        refletFacettes();
+        appliquer();
+      });
+    }
+
+    videAffiner?.addEventListener("click", () => {
+      const axe = videAffiner.dataset.relacher as "famille" | "pays" | undefined;
+      if (!axe) return;
+      etat[axe] = null;
+      refletFacettes();
+      appliquer();
+    });
+
+    function reinitialiser() {
+      champ!.value = "";
+      etat.q = "";
+      etat.famille = null;
+      etat.pays = null;
+      refletFacettes();
+      appliquer();
+      champ!.focus();
+    }
+    for (const reset of document.querySelectorAll("#reinitialiser, [data-reset]")) {
+      reset.addEventListener("click", reinitialiser);
+    }
+
+    // `/` ouvre la recherche, `Échap` la vide — deux raccourcis attendus d'un
+    // champ de filtre, et le seul endroit de la page qui en porte.
+    document.addEventListener("keydown", (event) => {
+      const cible = event.target as HTMLElement | null;
+      const saisie = cible && /^(INPUT|TEXTAREA|SELECT)$/.test(cible.tagName);
+
+      if (event.key === "/" && !saisie) {
+        event.preventDefault();
+        champ.focus();
+      } else if (event.key === "Escape" && cible === champ && champ.value !== "") {
+        champ.value = "";
+        etat.q = "";
+        appliquer();
+      }
+    });
+
+    // Le bouton Précédent doit défaire le filtre, pas quitter la page.
+    window.addEventListener("popstate", () => {
+      lireUrl();
+      appliquer();
+    });
+
+    lireUrl();
+    appliquer();
+  }
+
+  /**
+   * Les repères de lettre collent juste sous la console de recherche, dont la
+   * hauteur diffère entre téléphone et bureau. Elle est mesurée ici plutôt que
+   * devinée : un palier en dur laisse soit un interstice où les lignes défilent
+   * à découvert, soit un recouvrement du haut de la liste.
+   */
+  const console_ = document.querySelector<HTMLElement>("[data-console]");
+  if (console_) {
+    const mesurer = () =>
+      document.documentElement.style.setProperty("--console-h", `${console_.offsetHeight}px`);
+    mesurer();
+    if ("ResizeObserver" in window) new ResizeObserver(mesurer).observe(console_);
+    else window.addEventListener("resize", mesurer, { passive: true });
+  }
+
+  /**
+   * Les 522 logos vivent chez communecter.org : un tiers des URL répondent 404.
+   * La tuile n'apparaît donc qu'une fois l'image réellement peinte — sinon elle
+   * laisse un carré vide, c'est-à-dire un trou qui ressemble à un bug. En
+   * capture, parce que ni `load` ni `error` ne remontent depuis une image.
+   */
+  const peinte = (img: HTMLImageElement) => {
+    if (img.complete && img.naturalWidth > 0) img.setAttribute("data-loaded", "");
+  };
+
+  document.addEventListener(
+    "load",
+    (event) => {
+      const cible = event.target;
+      if (cible instanceof HTMLImageElement && cible.hasAttribute("data-logo")) peinte(cible);
+    },
+    true
+  );
+
+  // L'ouverture d'une fiche déclenche le chargement de son logo. Le second
+  // appel couvre l'image déjà en cache, complète avant même que `load` ait pu
+  // se produire — sans lui, la tuile resterait masquée à la réouverture.
+  document.addEventListener(
+    "toggle",
+    (event) => {
+      const cible = event.target;
+      if (!(cible instanceof HTMLDetailsElement) || !cible.open) return;
+      cible.querySelectorAll<HTMLImageElement>("img[data-logo]").forEach((img) => {
+        if (!img.getAttribute("src") && img.dataset.src) img.src = img.dataset.src;
+        peinte(img);
+      });
+    },
+    true
+  );
+
+  /**
+   * Le rail est servi ouvert pour rester lisible sans JavaScript. Sous `lg` il
+   * pousserait les 685 lignes hors de l'écran : on le replie ici, et on le
+   * rouvre si la fenêtre repasse au-dessus du seuil.
+   */
+  if (panneau) {
+    const compact = window.matchMedia("(max-width: 1023px)");
+    const ajuster = () => {
+      panneau.open = !compact.matches;
+    };
+    ajuster();
+    compact.addEventListener("change", ajuster);
+  }
+</script>

@@ -71,6 +71,67 @@ export const actors = raw.map((r) => ({
   url: r.site_web,
 }));
 
+/* ---------------------------------------------------------------- annuaire */
+
+/** Découpe un champ multi-valeurs du CSV (« a | b | c ») en tableau propre. */
+function split(field) {
+  return field ? field.split(" | ").map((v) => v.trim()).filter(Boolean) : [];
+}
+
+/**
+ * Retire les diacritiques et passe en minuscules. La recherche de l'annuaire est
+ * indifférente aux accents : « reunion » doit trouver « La Réunion », sinon le
+ * champ punit l'utilisateur pour une saisie que rien n'annonce.
+ */
+export function fold(text) {
+  return String(text)
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+}
+
+const collator = new Intl.Collator("fr", { sensitivity: "base" });
+
+/**
+ * Le jeu complet, une entrée par acteur, destiné à la page annuaire.
+ *
+ * Tout est sérialisé dans le HTML au build : les 685 fiches sont dans la page,
+ * le filtrage est local et instantané, et rien n'est demandé au réseau après le
+ * premier chargement. C'est le seul modèle qui tienne la promesse « les trous
+ * sont affichés » — un acteur sans pays ni famille reste dans la liste au lieu
+ * d'être écarté par une requête serveur qui ne saurait pas quoi en faire.
+ */
+export const directory = raw
+  .map((r) => {
+    const families = split(r.typologie)
+      .map((key) => FAMILY_BY_KEY.get(key))
+      .filter(Boolean);
+    const domaines = split(r.domaines);
+    const specialites = split(r.specialites);
+
+    return {
+      id: r.id,
+      name: r.nom,
+      families,
+      country: r.pays,
+      city: r.ville,
+      domaines,
+      specialites,
+      description: r.description_courte,
+      web: r.site_web,
+      email: r.email,
+      phone: r.telephone,
+      logo: r.logo_thumb_url,
+      source: r.url_communecter,
+      // Index de recherche pré-calculé au build : le client ne replie aucun
+      // accent à la frappe, il ne fait qu'un `includes` sur cette chaîne.
+      haystack: fold(
+        [r.nom, r.ville, r.pays, r.description_courte, ...domaines, ...specialites].join(" ")
+      ),
+    };
+  })
+  .sort((a, b) => collator.compare(a.name, b.name));
+
 /* ---------------------------------------------------------------- effectifs */
 
 export const familyCounts = FAMILIES.map((family) => ({
@@ -110,6 +171,30 @@ export const coverage = {
   countries: countryCounts.length,
   families: FAMILIES.length,
 };
+
+/* -------------------------------------------------------- facettes annuaire */
+
+/**
+ * Les deux axes de filtrage de l'annuaire, effectifs compris.
+ *
+ * Chacun se termine par sa propre valeur d'absence — « Sans famille »,
+ * « Sans pays ». Ce ne sont pas des rebuts : ce sont 21 et 113 acteurs que le
+ * recensement contient et que le filtre doit savoir atteindre.
+ */
+export const familyFacets = [
+  ...familyCounts.map((f) => ({ slug: f.slug, label: f.short, color: f.color, count: f.count })),
+  {
+    slug: "sans-famille",
+    label: "Sans famille",
+    color: "rgba(255,255,255,0.45)",
+    count: coverage.unclassified,
+  },
+];
+
+export const countryFacets = [
+  ...countryCounts.map((c) => ({ slug: c.country, label: c.country, count: c.count })),
+  { slug: "", label: "Sans pays", count: coverage.withoutCountry },
+];
 
 /* ------------------------------------------------------------------ carte */
 
