@@ -130,6 +130,27 @@ function flagOf(country) {
  * sont affichés » — un acteur sans pays ni famille reste dans la liste au lieu
  * d'être écarté par une requête serveur qui ne saurait pas quoi en faire.
  */
+/** Une adresse postale n'est renseignée que si elle porte plus qu'un fragment.
+ *  Le seuil écarte les cases à un ou deux caractères que la saisie libre laisse
+ *  passer, sans prétendre valider quoi que ce soit. */
+const aUneAdresse = (r) => (r.adresse ?? "").trim().length > 4;
+
+/** L'adresse telle qu'on l'affiche : la rue, puis le code postal et la ville,
+ *  sans répéter ce que la ligne de localisation dit déjà du pays. */
+function adresseLisible(r) {
+  if (!aUneAdresse(r)) return "";
+  return [r.adresse.trim(), [r.code_postal, r.ville].filter(Boolean).join(" ").trim()]
+    .filter(Boolean)
+    .join(", ");
+}
+
+/** La même adresse, pays compris : le géocodeur en a besoin pour trancher entre
+ *  les homonymes d'un bout à l'autre du bassin. */
+function requeteCarto(r) {
+  if (!aUneAdresse(r)) return "";
+  return [r.adresse.trim(), r.code_postal, r.ville, r.pays].filter(Boolean).join(", ");
+}
+
 export const directory = raw
   .map((r) => {
     const families = split(r.typologie)
@@ -145,6 +166,16 @@ export const directory = raw
       country: r.pays,
       flag: flagOf(r.pays),
       city: r.ville,
+      address: adresseLisible(r),
+      // Requête de localisation, et non un couple lat/lon. La source géolocalise
+      // au centroïde de la ville : un lien construit sur les coordonnées
+      // planterait le repère au milieu de Port-Louis pour les seize acteurs qui
+      // y sont recensés. En passant l'adresse écrite, c'est le service
+      // cartographique qui géocode, et il tombe sur la bonne porte.
+      //
+      // Pas de repli sur la seule ville : « Curepipe, Maurice » désigne une
+      // commune entière, et un lien qui promet une adresse doit en tenir une.
+      mapQuery: requeteCarto(r),
       domaines,
       specialites,
       description: r.description_courte,
