@@ -1,14 +1,16 @@
 /**
- * Prépare la géométrie de la carte Océan Indien à partir de Natural Earth 50m.
+ * Prépare la géométrie de la carte Océan Indien à partir de Natural Earth 10m.
  *
  * Sortie : src/data/map-oi.json — GeoJSON découpé à l'emprise des acteurs,
- * coordonnées arrondies au centième de degré (~1 km, largement suffisant à
- * l'échelle d'affichage) pour tenir le poids du fichier.
+ * simplifié par palier : la finesse conservée dépend de l'échelle à laquelle
+ * chaque terre sera regardée, pas d'un réglage unique.
  *
- * Le 50m est nécessaire : le 110m ne contient ni les Seychelles, ni les
- * Maldives, ni Maurice, ni les Comores. La Réunion et Mayotte n'existent pas
- * comme entités propres — ce sont deux polygones de la géométrie « France »,
- * que le découpage par emprise isole du territoire métropolitain.
+ * La Réunion et Mayotte n'existent pas comme entités propres — ce sont deux
+ * polygones de la géométrie « France », que le découpage par emprise isole du
+ * territoire métropolitain. C'est pourquoi le choix de finesse se fait par
+ * anneau et non par pays : mesurée sur ses terres dans le cadre, « France »
+ * couvre onze degrés, et une règle par pays laisserait La Réunion au trait
+ * grossier alors qu'elle est précisément ce qu'on va zoomer.
  *
  * Usage : node scripts/build_map.mjs
  */
@@ -18,7 +20,20 @@ import { feature } from "topojson-client";
 // projection laisserait des côtes tronquées apparaître dans le cadre.
 import { BOUNDS } from "../src/lib/projection.js";
 
-const SOURCE = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json";
+/**
+ * Le 10m, et non le 50m.
+ *
+ * Le 50m ne contient que quinze sommets pour La Réunion : cinq kilomètres entre
+ * deux points, soit un décagone qui n'est plus l'île. Tant que la carte se
+ * lisait au bassin, l'approximation passait sous le pixel. Depuis qu'on peut
+ * zoomer jusqu'au niveau d'une commune, elle affiche un littoral faux — et une
+ * carte qui invente une côte ment sur son sujet, pas sur son décor.
+ *
+ * Le 10m en donne 84. Il pèse cinq fois plus en source, mais la source ne part
+ * pas au navigateur : c'est la simplification par palier ci-dessous qui décide
+ * de ce qui est expédié, et elle ne garde la finesse que là où on la regarde.
+ */
+const SOURCE = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-10m.json";
 const OUT = "src/data/map-oi.json";
 
 /** Pays de la zone couverte par le recensement, mis en avant sur la carte. */
@@ -27,7 +42,17 @@ const IN_SCOPE = new Set([
   "Seychelles", "Comoros", "Maldives", "Sri Lanka", "India", "Australia", "France",
 ]);
 
-const round = (n) => Math.round(n * 100) / 100;
+/** Étendue d'un anneau, en degrés. */
+function etendueAnneau(ring) {
+  let w = Infinity, e = -Infinity, s = Infinity, n = -Infinity;
+  for (const [lon, lat] of ring) {
+    if (lon < w) w = lon;
+    if (lon > e) e = lon;
+    if (lat < s) s = lat;
+    if (lat > n) n = lat;
+  }
+  return Math.max(e - w, n - s);
+}
 
 /** Un anneau est conservé dès qu'il croise l'emprise, pas seulement s'il y tient. */
 function ringIntersects(ring) {
@@ -75,22 +100,34 @@ function douglasPeucker(points, tolerance) {
 }
 
 /**
- * La tolérance suit la taille de l'anneau. À l'échelle d'affichage (~10 px par
- * degré), 0,12° est sous le pixel sur un continent. Les petites îles —
- * Réunion, Maurice, Seychelles, Maldives, Comores — sont le sujet même de
- * cette carte : elles gardent une tolérance dix fois plus fine, sans quoi
- * elles se réduisent à un triangle.
+ * Finesse d'un anneau : tolérance, décimales conservées, et taille en dessous
+ * de laquelle il ne vaut pas la peine d'être tracé.
+ *
+ * Trois choses la commandent, et la première est le statut. Hors périmètre, la
+ * géométrie est du décor — on ne zoome jamais dessus pour y lire quelque chose,
+ * elle reste au trait grossier. Dans le périmètre, la finesse suit l'étendue :
+ * plus une terre est petite, plus le facteur d'agrandissement auquel on la
+ * regarde est grand, donc plus son littoral doit être vrai de près.
+ *
+ * L'arrondi compte autant que la tolérance, et se règle avec elle. Au
+ * centième de degré — 1,1 km — les sommets d'une île se confondent deux à deux
+ * et tout le gain du 10m se perd à l'écriture. La Réunion a besoin du
+ * dix-millième pour que ses 71 sommets restent distincts.
  */
-function simplifyRing(ring) {
-  let w = Infinity, e = -Infinity, s = Infinity, n = -Infinity;
-  for (const [lon, lat] of ring) {
-    if (lon < w) w = lon;
-    if (lon > e) e = lon;
-    if (lat < s) s = lat;
-    if (lat > n) n = lat;
-  }
-  const span = Math.max(e - w, n - s);
-  const tolerance = span < 3 ? 0.012 : 0.12;
+function finesse(span, dansLePerimetre) {
+  if (!dansLePerimetre) return { tolerance: 0.12, decimales: 2, etendueMin: 0.15 };
+  if (span < 1.5) return { tolerance: 0.0015, decimales: 4, etendueMin: 0.004 };
+  if (span < 6) return { tolerance: 0.01, decimales: 3, etendueMin: 0.02 };
+  return { tolerance: 0.08, decimales: 2, etendueMin: 0.05 };
+}
+
+function simplifyRing(ring, dansLePerimetre) {
+  const span = etendueAnneau(ring);
+  const { tolerance, decimales, etendueMin } = finesse(span, dansLePerimetre);
+  // Un caillou plus petit que le trait qui le dessinerait n'apporte rien.
+  if (span < etendueMin) return null;
+  const facteur = 10 ** decimales;
+  const round = (n) => Math.round(n * facteur) / facteur;
 
   const simplified = douglasPeucker(ring, tolerance);
   const out = [];
@@ -108,13 +145,13 @@ function simplifyRing(ring) {
   return out;
 }
 
-function clipGeometry(geometry) {
+function clipGeometry(geometry, dansLePerimetre) {
   const polygons =
     geometry.type === "MultiPolygon" ? geometry.coordinates : [geometry.coordinates];
   const kept = [];
   for (const polygon of polygons) {
     if (!ringIntersects(polygon[0])) continue;
-    const rings = polygon.map(simplifyRing).filter(Boolean);
+    const rings = polygon.map((r) => simplifyRing(r, dansLePerimetre)).filter(Boolean);
     if (rings.length) kept.push(rings);
   }
   if (!kept.length) return null;
@@ -128,11 +165,12 @@ const countries = feature(topology, topology.objects.countries);
 
 const features = [];
 for (const f of countries.features) {
-  const geometry = clipGeometry(f.geometry);
+  const inScope = IN_SCOPE.has(f.properties.name);
+  const geometry = clipGeometry(f.geometry, inScope);
   if (!geometry) continue;
   features.push({
     type: "Feature",
-    properties: { name: f.properties.name, inScope: IN_SCOPE.has(f.properties.name) },
+    properties: { name: f.properties.name, inScope },
     geometry,
   });
 }
