@@ -134,7 +134,11 @@ const withCountry = coverage.total - coverage.withoutCountry;
         </p>
 
         <div
-          class="mt-9 flex flex-col items-start gap-4 sm:flex-row sm:items-center"
+          {/* `flex-wrap` : les trois libellés font 640 px à eux seuls, pour une
+              colonne de héros qui n'en fait que 480 au-delà de `lg`. Sans repli,
+              les boutons ne rétrécissaient pas — ils se chevauchaient, et
+              « Parcourir l'annuaire » passait sous « Explorer la carte ». */}
+          class="mt-9 flex flex-col items-start gap-4 sm:flex-row sm:flex-wrap sm:items-center"
           style="animation:slide-up .8s cubic-bezier(.16,1,.3,1) .3s both"
         >
           {/* L'annuaire passe en action principale : la page sert à trouver un
