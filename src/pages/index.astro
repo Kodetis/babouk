@@ -141,9 +141,8 @@ const withCountry = coverage.total - coverage.withoutCountry;
           class="mt-9 flex flex-col items-start gap-4 sm:flex-row sm:flex-wrap sm:items-center"
           style="animation:slide-up .8s cubic-bezier(.16,1,.3,1) .3s both"
         >
-          {/* L'annuaire passe en action principale : la page sert à trouver un
-              acteur, pas à repartir avec un fichier. Le recensement reste
-              disponible juste à côté. */}
+          {/* L'annuaire est l'action principale : la page sert à trouver un
+              acteur. */}
           <a href={asset("annuaire/")} class="btn-primary">
             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <circle cx="11" cy="11" r="7" />
@@ -152,19 +151,12 @@ const withCountry = coverage.total - coverage.withoutCountry;
             Parcourir l'annuaire
           </a>
           {/* Deux portes d'entrée, deux façons de chercher : par le nom dans
-              l'annuaire, par le lieu sur la carte. Le téléchargement passe en
-              troisième — c'est une sortie, pas une entrée. */}
+              l'annuaire, par le lieu sur la carte. */}
           <a href={asset("carte/")} class="btn-outline">
             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.4 1.8a1 1 0 0 1-1.3-1V5.6a1 1 0 0 1 .7-1L9 3m0 17 6-2m-6 2V3m6 15 5.4 1.8a1 1 0 0 0 1.3-1V5.6a1 1 0 0 0-.7-1L15 3m0 15V3m-6 0 6 2" />
             </svg>
             Explorer la carte
-          </a>
-          <a href={asset("acteurs.csv")} download class="btn-outline">
-            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-            </svg>
-            Télécharger le recensement
           </a>
         </div>
       </div>

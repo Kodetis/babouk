@@ -15,28 +15,16 @@ import { asset, home } from "../lib/url.js";
         {coverage.total} acteurs · {coverage.countries} pays · Zone Océan Indien
       </p>
 
-      <div class="flex items-center gap-4">
-        <a
-          href={asset("acteurs.csv")}
-          download
-          class="meta text-white/50 transition-colors hover:text-gold"
-        >
-          acteurs.csv
-        </a>
-        <span class="text-white/10" aria-hidden="true">|</span>
-        <a href="#contenu" class="meta text-white/50 transition-colors hover:text-gold">
-          ↑ Haut de page
-        </a>
-      </div>
+      <a href="#contenu" class="meta text-white/50 transition-colors hover:text-gold">
+        ↑ Haut de page
+      </a>
     </div>
 
-    <div
-      class="mt-8 flex flex-col items-center gap-2 border-t border-white/[0.06] pt-6 text-center md:flex-row md:justify-between md:text-left"
-    >
-      <p class="text-xs leading-relaxed text-white/55">
-        Un projet <span class="text-white/60">Kodetis</span>. Données issues de l'annuaire
-        Communecter de l'EDIH La Réunion.
-      </p>
+    {/* La réserve d'indépendance, seule sur sa rangée depuis le retrait de la
+        ligne d'origine des données. Centrée, et non poussée à gauche par un
+        `justify-between` qui n'a plus qu'un enfant : un texte isolé calé sur un
+        bord se lit comme s'il manquait son vis-à-vis. */}
+    <div class="mt-8 border-t border-white/[0.06] pt-6 text-center">
       <p class="text-xs leading-relaxed text-white/55">
         Babouk n'est ni mandaté ni endossé par les organisations citées.
       </p>
