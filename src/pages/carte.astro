@@ -10,6 +10,7 @@ import {
   familyFacets,
   countryFacets,
   coverage,
+  paysFoyers,
 } from "../lib/data.js";
 import { cadrages } from "../lib/vues.js";
 import { asset } from "../lib/url.js";
@@ -42,19 +43,16 @@ const SANS_FAMILLE = { short: "Sans famille", color: "rgba(255,255,255,0.45)" };
 const famille = (slug) => PAR_SLUG.get(slug) ?? SANS_FAMILLE;
 
 /**
- * Nom du foyer. La source ne nomme pas les groupes : on prend la ville la plus
- * représentée dans la cellule, faute de quoi le pays. Un foyer d'un demi-degré
- * ne chevauche aucune frontière — une garde au build le vérifie dans data.js.
+ * Les pays que le cadrage sait atteindre, avec ce qu'ils peuvent montrer.
+ *
+ * L'ordre suit celui des facettes, pour qu'un en-tête corresponde toujours au
+ * libellé sur lequel on vient de cliquer. Un pays sans foyer géolocalisé —
+ * « France 1 » — n'a pas d'en-tête : il n'y a rien à cadrer, et la carte reste
+ * au bassin.
  */
-function lieu(p) {
-  const villes = new Map();
-  for (const a of p.actors) {
-    if (!a.city) continue;
-    villes.set(a.city, (villes.get(a.city) ?? 0) + 1);
-  }
-  const top = [...villes].sort((a, b) => b[1] - a[1])[0];
-  return top ? top[0] : p.country || "Lieu non nommé";
-}
+const entetesPays = countryFacets
+  .filter((c) => paysFoyers.has(c.slug))
+  .map((c) => ({ ...c, ...paysFoyers.get(c.slug) }));
 
 /** Acteurs hors carte : sans coordonnées, plus celui qui tombe hors du cadre. */
 const horsCarte = coverage.unlocated + coverage.offFrame;
@@ -86,21 +84,29 @@ const CONTRACT = `<!--
 >
   <Navbar />
 
-  <main id="contenu" class="pt-28 sm:pt-32">
-    <header class="mx-auto max-w-7xl px-6">
-      <h1 class="font-display font-bold leading-[0.95] tracking-[-0.02em]">
-        <span class="block text-[clamp(2.25rem,5.5vw,3.5rem)] text-white">Le recensement,</span>
-        <span class="block text-[clamp(2.25rem,5.5vw,3.5rem)] text-gold">sur la carte</span>
+  {/* Le titre d'une page Operate n'est pas un héros : il identifie l'écran, il
+      ne le vend pas. Composé sur deux colonnes plutôt qu'en pleine largeur, il
+      cesse de laisser la moitié droite du premier écran vide et rend au-dessus
+      de la ligne de flottaison les ~250 px que l'instrument réclamait. */}
+  <main id="contenu">
+    <header
+      class="mx-auto max-w-7xl px-6 pt-24 pb-7 sm:pt-28 lg:grid lg:grid-cols-12 lg:items-end lg:gap-10"
+    >
+      <h1
+        class="font-display font-bold leading-[0.95] tracking-[-0.02em] lg:col-span-5 lg:-mb-1"
+      >
+        <span class="block text-[clamp(1.875rem,3.6vw,2.75rem)] text-white">Le recensement,</span>
+        <span class="block text-[clamp(1.875rem,3.6vw,2.75rem)] text-gold">sur la carte</span>
       </h1>
 
-      <p class="mt-6 max-w-2xl text-lg leading-relaxed text-white/70">
+      <p class="mt-5 max-w-prose leading-relaxed text-white/70 lg:col-span-6 lg:col-start-7 lg:mt-0">
         {nf.format(coverage.onMap)} acteurs géolocalisés, regroupés en {mapPoints.length} foyers —
         une bonne part des fiches partagent le centroïde de leur ville, un disque vaut donc
         souvent plusieurs acteurs. Cliquez un foyer pour lire qui s'y trouve.
       </p>
 
       <noscript>
-        <p class="panel mt-6 max-w-2xl p-5 text-sm leading-relaxed text-white/70">
+        <p class="panel mt-6 max-w-2xl p-5 text-sm leading-relaxed text-white/70 lg:col-span-12">
           Les filtres et le panneau demandent JavaScript. La carte reste lisible telle quelle, et
           <a href={asset("annuaire/")} class="text-gold underline">l'annuaire</a> liste les
           {nf.format(coverage.total)} acteurs sans en avoir besoin.
@@ -113,58 +119,78 @@ const CONTRACT = `<!--
         « Sans famille » et « Sans pays », qui ne sont pas des rebuts mais 21 et
         113 acteurs que le filtre doit savoir atteindre. Pas de champ texte : la
         recherche plein texte reste à l'annuaire, la carte n'en est pas un
-        second moteur. */}
+        second moteur.
+
+        Deux rangées pleine largeur plutôt que deux colonnes : à colonnes
+        égales, « Défense / Intérieur » ne tenait qu'à deux par ligne et les
+        neuf familles occupaient cinq rangées, pendant que le tiers droit de la
+        barre restait vide sous les boutons. La barre est collante — chaque
+        rangée qu'elle garde est une rangée que la carte perd, en permanence. */}
     <div
       data-console
-      class="sticky top-20 z-40 mt-10 border-y border-white/[0.06] bg-navy-dark/95 py-4 backdrop-blur-md"
+      class="sticky top-20 z-40 mt-8 border-y border-white/[0.06] bg-navy-dark/95 py-3.5 backdrop-blur-md lg:py-4"
     >
       <div class="mx-auto max-w-7xl px-6">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-10">
-          <section aria-labelledby="titre-familles" class="min-w-0 flex-1">
-            <h2 id="titre-familles" class="meta text-white/70">Famille</h2>
-            <div class="mt-2.5 flex flex-wrap gap-1.5">
-              {familyFacets.map((f) => (
-                <button
-                  type="button"
-                  class:list={["facet facet--chip", !foyersParFamille.get(f.slug) && "facet--vide"]}
-                  data-facet="famille"
-                  data-value={f.slug}
-                  aria-pressed="false"
-                  style={`--accent:${f.color}`}
-                >
-                  <span class="facet-dot" aria-hidden="true"></span>
-                  <span class="text-sm">{f.label}</span>
-                  <span class="readout text-xs text-white/60" data-count>{nf.format(f.count)}</span>
-                </button>
-              ))}
-            </div>
-          </section>
+        <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-8">
+          {/* L'écart entre les deux axes est plus grand que celui entre deux
+              rangées d'un même axe : c'est ce qui les fait lire comme deux
+              questions et non comme vingt-trois cases en vrac. */}
+          <div class="grid min-w-0 gap-2.5 lg:gap-3">
+            <section aria-labelledby="titre-familles" class="axe">
+              <h2 id="titre-familles" class="meta axe-titre text-white/70">Famille</h2>
+              <div class="axe-piste">
+                <div class="axe-chips">
+                  {familyFacets.map((f) => (
+                    <button
+                      type="button"
+                      class:list={["facet facet--chip", !foyersParFamille.get(f.slug) && "facet--vide"]}
+                      data-facet="famille"
+                      data-value={f.slug}
+                      aria-pressed="false"
+                      style={`--accent:${f.color}`}
+                    >
+                      <span class="facet-dot" aria-hidden="true"></span>
+                      <span class="text-sm">{f.label}</span>
+                      <span class="readout text-xs text-white/60" data-count>{nf.format(f.count)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
 
-          <section aria-labelledby="titre-pays" class="min-w-0 flex-1">
-            <h2 id="titre-pays" class="meta text-white/70">Pays</h2>
-            <div class="mt-2.5 flex flex-wrap gap-1.5">
-              {/* Sans pastille : la pastille nomme une famille. Quatorze
-                  disques blancs identiques ne nommeraient rien. */}
-              {countryFacets.map((c) => (
-                <button
-                  type="button"
-                  class:list={[
-                    "facet facet--chip facet--plain",
-                    !foyersParPays.get(c.slug) && "facet--vide",
-                  ]}
-                  data-facet="pays"
-                  data-value={c.slug}
-                  aria-pressed="false"
-                  data-cadrage={cadrages[c.slug] ? JSON.stringify(cadrages[c.slug]) : undefined}
-                >
-                  <span class="text-sm">{c.label}</span>
-                  <span class="readout text-xs text-white/60" data-count>{nf.format(c.count)}</span>
-                </button>
-              ))}
-            </div>
-          </section>
+            <section aria-labelledby="titre-pays" class="axe">
+              <h2 id="titre-pays" class="meta axe-titre text-white/70">Pays</h2>
+              <div class="axe-piste">
+                <div class="axe-chips">
+                  {/* Sans pastille : la pastille nomme une famille. Quatorze
+                      disques blancs identiques ne nommeraient rien. */}
+                  {countryFacets.map((c) => (
+                    <button
+                      type="button"
+                      class:list={[
+                        "facet facet--chip facet--plain",
+                        !foyersParPays.get(c.slug) && "facet--vide",
+                      ]}
+                      data-facet="pays"
+                      data-value={c.slug}
+                      aria-pressed="false"
+                      data-cadrage={cadrages[c.slug] ? JSON.stringify(cadrages[c.slug]) : undefined}
+                    >
+                      <span class="text-sm">{c.label}</span>
+                      <span class="readout text-xs text-white/60" data-count>{nf.format(c.count)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </div>
 
-          <div class="flex shrink-0 items-center gap-3">
+          {/* Empilées et en regard des deux rangées, et non alignées côte à côte
+              en haut de barre. Côte à côte elles réservaient cinq cents pixels
+              de largeur aux dépens des facettes, qui débordaient alors sur trois
+              rangées chacune — et sous elles il ne restait qu'un quart de barre
+              vide. */}
+          <div class="actions">
             <button
               type="button"
               id="reinitialiser"
@@ -172,7 +198,11 @@ const CONTRACT = `<!--
             >
               Réinitialiser
             </button>
-            <a id="vers-annuaire" href={asset("annuaire/")} class="btn-outline text-xs">
+            <a
+              id="vers-annuaire"
+              href={asset("annuaire/")}
+              class="btn-outline justify-center text-center text-xs"
+            >
               Voir dans l'annuaire
             </a>
           </div>
@@ -180,19 +210,71 @@ const CONTRACT = `<!--
       </div>
     </div>
 
-    {/* ========================== CARTE ET PANNEAU ========================== */}
-    <div class="mx-auto mt-10 max-w-7xl px-6 pb-28">
-      <div class="grid gap-8 lg:grid-cols-12 lg:gap-10">
-        <div data-carte class="lg:col-span-8">
-          <div class="panel overflow-hidden p-2 sm:p-4">
-            <MapOceanIndien interactif class="carte-travail" />
+    {/* ========================== CARTE ET PANNEAU ==========================
+        Un seul appareil, et non trois blocs empilés dans une gouttière.
+
+        La bande sort du `max-w-7xl` : le cadre fait 1,9:1, chaque pixel rendu
+        en largeur en rend un demi en hauteur, et les 192 px de gouttière que le
+        conteneur de lecture impose à 1920 coûtaient 200 px de bassin. La hauteur
+        n'est plus posée : elle découle du rapport du cadre, et le panneau s'y
+        étire — c'est ce qui vide la colonne de droite de ses 60 % de néant. */}
+    <div class="travail mt-6 pb-14 sm:pb-20">
+      <div class="travail-grille">
+        <div data-carte class="carte-cadre">
+          <MapOceanIndien interactif class="carte-travail" />
+
+          {/* Commandes de navigation.
+              La molette et le glisser ne s'annoncent pas : sans bouton visible,
+              rien ne dit qu'une carte se manipule, et un visiteur au clavier ou
+              au doigt n'a aucune prise. Ces trois-là sont l'affordance autant
+              que l'outil. Le niveau est écrit à côté — il change ce que la carte
+              montre, ce n'est pas un détail de rendu. */}
+          <div class="carte-commandes">
+            <button type="button" data-zoom="1.6" class="carte-bouton" aria-label="Zoomer">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path stroke-linecap="round" d="M12 6v12M6 12h12" />
+              </svg>
+            </button>
+            <button type="button" data-zoom="0.625" class="carte-bouton" aria-label="Dézoomer">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path stroke-linecap="round" d="M6 12h12" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              data-vue-pleine
+              class="carte-bouton"
+              aria-label="Revenir au bassin entier"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" />
+              </svg>
+            </button>
           </div>
 
-          <div id="vide" class="hidden panel mt-6 p-8 text-center">
-            <p id="vide-cause" class="mx-auto max-w-lg leading-relaxed text-white/70"></p>
-            <button type="button" data-reset class="btn-outline mt-6 text-xs">
-              Tout réafficher
-            </button>
+          {/* Le facteur d'agrandissement, en clair. Une carte qui se déplace
+              sans jamais dire où elle en est oblige à zoomer à l'aveugle. */}
+          <p class="carte-echelle meta" aria-live="polite">
+            <span data-echelle>×1</span>
+            <span data-grille class="carte-grille"></span>
+          </p>
+
+          {/* Apparaît sur un coup de molette nu, que la carte laisse volontairement
+              passer à la page. Sans ce mot, l'absence de zoom se lit comme une panne. */}
+          <p data-indice hidden class="carte-indice meta">
+            Ctrl + molette pour zoomer · glisser pour déplacer
+          </p>
+
+          {/* Sur la carte et non sous elle : le message parle de ce qu'on est en
+              train de regarder. Une carte vide surmontée d'un encart hors cadre
+              obligeait à quitter l'instrument pour lire pourquoi il est éteint. */}
+          <div id="vide" class="hidden carte-vide">
+            <div class="panel bg-navy-dark/90 p-6 text-center backdrop-blur-sm sm:p-8">
+              <p id="vide-cause" class="mx-auto max-w-sm leading-relaxed text-white/70"></p>
+              <button type="button" data-reset class="btn-outline mt-5 text-xs">
+                Tout réafficher
+              </button>
+            </div>
           </div>
         </div>
 
@@ -201,10 +283,58 @@ const CONTRACT = `<!--
             `hidden` plutôt qu'une classe, pour que les 54 panneaux fermés
             sortent aussi de l'arbre d'accessibilité — sinon le parcours clavier
             traverse 568 liens invisibles. */}
-        <aside data-panneau-hote class="lg:col-span-4">
-          <div class="panel flex max-h-[70dvh] flex-col overflow-hidden lg:sticky lg:top-40">
-            <div id="panneau-invite" class="p-8">
-              <p class="leading-relaxed text-white/70">
+        <aside data-panneau-hote>
+          <div class="panel flex h-full flex-col overflow-hidden">
+            {/* Barre de feuille, tactile seulement. Sous `lg` le panneau est une
+                feuille ancrée en bas d'écran : sans bouton, `Échap` était le seul
+                moyen de la refermer, c'est-à-dire aucun sur un téléphone. */}
+            <div class="feuille-barre lg:hidden">
+              <span class="feuille-poignee" aria-hidden="true"></span>
+              <button type="button" data-fermer class="meta feuille-fermer">Fermer</button>
+            </div>
+
+            {/* En-tête de pays. Hors de la zone de défilement : il nomme ce
+                qu'on lit, il ne doit pas partir avec la liste. Un seul est
+                démasqué à la fois.
+
+                `separable` est ce qui distingue les deux cas que le cadrage
+                recouvre. La Réunion a 43 coordonnées distinctes pour 45 acteurs :
+                zoomer y montre la répartition réelle. Les Maldives en ont une
+                pour 41 : aucun zoom n'y séparera jamais rien, et l'écran le dit
+                plutôt que de laisser prendre un centroïde pour une adresse. */}
+            {entetesPays.map((c) => (
+              <header
+                data-entete-pays={c.slug}
+                hidden
+                class="shrink-0 border-b border-white/[0.08] px-6 py-5"
+              >
+                <div class="flex items-baseline justify-between gap-4">
+                  <h2 class="truncate font-display text-lg font-semibold text-white">
+                    {c.label}
+                  </h2>
+                  <span class="readout shrink-0 text-2xl text-white">{nf.format(c.acteurs)}</span>
+                </div>
+                <p class="meta mt-1.5 text-white/55">
+                  {c.foyers} {c.foyers > 1 ? "foyers" : "foyer"} · {nf.format(c.acteurs)} acteurs
+                </p>
+                {c.concentre && (
+                  <p class="mt-3 text-xs leading-relaxed text-white/55">
+                    {c.plusGros} de ces {nf.format(c.acteurs)} fiches partagent un seul point, à
+                    {" "}{c.lieuPlusGros} : la source géolocalise au centroïde de la ville, pas à
+                    l'adresse. Le zoom ne les séparera pas — la liste, si.
+                  </p>
+                )}
+              </header>
+            ))}
+
+            {/* Une seule zone de défilement pour tout le panneau. Auparavant
+                chaque foyer défilait dans sa propre liste : avec les 43 foyers
+                d'un pays affichés à la suite, il en aurait fallu 43. */}
+            <div class="panneau-corps">
+            {/* Centrée sur la hauteur du rail : posée en haut, elle laissait
+                deux lignes de texte flotter au-dessus d'un demi-écran vide. */}
+            <div id="panneau-invite" class="grid min-h-full place-content-center p-8">
+              <p class="max-w-[24ch] text-center leading-relaxed text-white/70">
                 Cliquez un foyer sur la carte pour lire les acteurs qui s'y trouvent.
               </p>
             </div>
@@ -212,27 +342,31 @@ const CONTRACT = `<!--
             {niveaux.flatMap(({ nom, points }) => points.map((p, i) => (
               <section
                 data-panneau={`${nom}-${i}`}
+                data-pays={p.country}
                 hidden
-                aria-label={`Acteurs du foyer de ${lieu(p)}`}
-                class="flex min-h-0 flex-col"
+                aria-label={`Acteurs du foyer de ${p.lieu}`}
+                class="foyer-bloc"
               >
-                <div class="flex items-baseline justify-between gap-4 border-b border-white/[0.08] p-6">
+                {/* Collant en tête de la zone de défilement : en parcourant les
+                    43 foyers de La Réunion, on sait toujours quelle commune on
+                    est en train de lire. */}
+                <div class="foyer-entete flex items-baseline justify-between gap-4 border-b border-white/[0.08] p-6">
                   <div class="min-w-0">
                     {/* `tabindex="-1"` : le titre n'entre pas dans le parcours
                         clavier, mais peut recevoir le focus à l'ouverture pour
                         que la lecture enchaîne lieu, effectif, puis liste. */}
-                    <h2
+                    <h3
                       tabindex="-1"
-                      class="truncate font-display text-lg font-semibold text-white outline-none"
+                      class="truncate font-display text-base font-semibold text-white outline-none"
                     >
-                      {lieu(p)}
-                    </h2>
+                      {p.lieu}
+                    </h3>
                     <p class="meta mt-1 truncate text-white/55">{p.country || "Sans pays"}</p>
                   </div>
-                  <span class="readout shrink-0 text-2xl text-white">{p.n}</span>
+                  <span class="readout shrink-0 text-xl text-white">{p.n}</span>
                 </div>
 
-                <ul class="min-h-0 flex-1 divide-y divide-white/[0.06] overflow-y-auto">
+                <ul class="divide-y divide-white/[0.06]">
                   {p.actors.map((a) => (
                     <li data-acteur data-f={a.fams} data-c={p.country} class="px-6 py-4">
                       <div class="flex items-start gap-3">
@@ -280,21 +414,21 @@ const CONTRACT = `<!--
                 </ul>
               </section>
             )))}
-
-            {/* Permanent, sous le panneau quel que soit son état. Les masquer
-                serait le seul vrai mensonge possible sur une page qui s'appelle
-                « carte » : ils comptent dans le total et ne sont nulle part. */}
-            <footer class="border-t border-white/[0.08] p-5">
-              <p class="text-xs leading-relaxed text-white/55">
-                <strong class="font-semibold text-white/75">{horsCarte} acteurs</strong> ne sont pas
-                sur la carte — {coverage.unlocated} sans coordonnées et {coverage.offFrame} hors du
-                cadre. Ils sont dans
-                {" "}<a href={asset("annuaire/")} class="text-gold underline">l'annuaire</a>.
-              </p>
-            </footer>
+            </div>
           </div>
         </aside>
       </div>
+
+      {/* La réserve d'exhaustivité, sous la carte plutôt qu'au fond du panneau.
+          Sous `lg` le panneau est une feuille hors écran tant qu'aucun foyer
+          n'est ouvert : la mention n'y était jamais lue sur un téléphone, alors
+          qu'elle est la seule chose qui empêche cette page de mentir. En légende
+          de l'instrument, elle est visible partout et lue par tous. */}
+      <p class="mx-auto mt-4 max-w-7xl px-6 text-xs leading-relaxed text-white/55">
+        <strong class="font-semibold text-white/75">{horsCarte} acteurs</strong> ne sont pas sur la
+        carte — {coverage.unlocated} sans coordonnées et {coverage.offFrame} hors du cadre. Ils sont
+        dans {" "}<a href={asset("annuaire/")} class="text-gold underline">l'annuaire</a>.
+      </p>
     </div>
   </main>
 
@@ -324,6 +458,18 @@ const CONTRACT = `<!--
   const panneaux = new Map(
     Array.from(document.querySelectorAll<HTMLElement>("[data-panneau]"))
       .map((s) => [s.dataset.panneau ?? "", s])
+  );
+  const entetes = new Map(
+    Array.from(document.querySelectorAll<HTMLElement>("[data-entete-pays]"))
+      .map((h) => [h.dataset.entetePays ?? "", h])
+  );
+  const corps = document.querySelector<HTMLElement>(".panneau-corps");
+
+  /** Les cadrages calculés au build, portés par les facettes pays. Un pays sans
+   *  foyer géolocalisé n'y figure pas : il n'y a rien à cadrer. */
+  const cadrages = new Map<string, { k: number; tx: number; ty: number }>(
+    Array.from(document.querySelectorAll<HTMLElement>('[data-facet="pays"][data-cadrage]'))
+      .map((b) => [b.dataset.value ?? "", JSON.parse(b.dataset.cadrage!)])
   );
 
   /**
@@ -358,6 +504,173 @@ const CONTRACT = `<!--
       const b = boutons.find((x) => x.dataset.facet === axe && (x.dataset.value ?? "") === valeur);
       return b?.querySelector("span:not(.facet-dot):not([data-count])")?.textContent?.trim() ?? valeur;
     };
+
+    /* ------------------------------------------------------------------ vue
+
+       La fenêtre est un état à part entière, et non une conséquence du filtre.
+       Le cadrage par pays reste un raccourci — il pose une vue d'un coup — mais
+       il n'est plus la seule façon d'atteindre une région : on peut désormais
+       aller regarder à côté, ce que le seul jeu de douze cadrages interdisait.
+
+       `translate(tx, ty) scale(k)` dans le repère du viewBox racine. Un point de
+       la carte en `(x, y)` se peint donc en `(x·k + tx, y·k + ty)`. */
+
+    const VUE_PLEINE = { k: 1, tx: 0, ty: 0 };
+    const K_MIN = 1;
+    const K_MAX = 60;
+    /** Au-delà, la vue est assez serrée pour que la grille fine sépare quelque
+     *  chose. En deçà, ses 205 foyers ne feraient qu'un pâté de plus que les 55. */
+    const K_GRILLE_FINE = 6;
+    const LARGEUR = 1410;
+    const HAUTEUR = 740;
+
+    const vue = { ...VUE_PLEINE };
+    const cadreG = document.querySelector<SVGGElement>(".cadre");
+    const svg = carte.querySelector("svg");
+
+    /** Le cadre reste rempli de carte : la fenêtre visible ne peut pas sortir de
+     *  l'emprise. Sans cette borne, un glisser un peu vif laisse la mer nue et
+     *  il faut deviner comment revenir. */
+    function borner() {
+      vue.k = Math.min(K_MAX, Math.max(K_MIN, vue.k));
+      vue.tx = Math.min(0, Math.max(LARGEUR * (1 - vue.k), vue.tx));
+      vue.ty = Math.min(0, Math.max(HAUTEUR * (1 - vue.k), vue.ty));
+    }
+
+    /**
+     * Écrit la vue et en tire les conséquences.
+     *
+     * `anime` distingue un saut décidé — choisir un pays, revenir au bassin —
+     * d'un geste continu. Le premier glisse en 0,6 s, le second doit coller à la
+     * main : animer chaque frame d'un glisser ferait traîner la carte derrière
+     * le curseur.
+     */
+    let ecritureVue = 0;
+    function poserVue(anime = false) {
+      if (!cadreG) return;
+      borner();
+      cadreG.toggleAttribute("data-anime", anime);
+      cadreG.style.setProperty("--k", String(vue.k));
+      cadreG.style.setProperty("--tx", String(vue.tx));
+      cadreG.style.setProperty("--ty", String(vue.ty));
+
+      const voulu: "large" | "fin" = niveauVoulu();
+      if (voulu !== niveau) {
+        // Le foyer ouvert appartient au jeu qu'on quitte : sa clé n'existe plus.
+        document.querySelector(".node[data-actif]")?.removeAttribute("data-actif");
+        ouvert = null;
+        niveau = voulu;
+        for (const [nom, groupe] of groupes) groupe.toggleAttribute("hidden", nom !== niveau);
+        marquerFoyers();
+        rendrePanneau();
+      }
+
+      const echelle = document.querySelector<HTMLElement>("[data-echelle]");
+      if (echelle) echelle.textContent = `×${vue.k < 10 ? vue.k.toFixed(1).replace(/\.0$/, "") : Math.round(vue.k)}`;
+      const grille = document.querySelector<HTMLElement>("[data-grille]");
+      if (grille) grille.textContent = niveau === "fin" ? "grille fine" : "";
+
+      // Le rangement des noms dépend de la vue : il est refait à chaque frame,
+      // mais une seule fois par frame.
+      cancelAnimationFrame(ecritureVue);
+      ecritureVue = requestAnimationFrame(rangerNoms);
+    }
+
+    /** La grille fine dès qu'un pays est cadré — même à faible facteur, l'Inde
+     *  et l'Australie ne dépassent pas ×3 — ou dès que la vue est assez serrée
+     *  pour la porter, quel que soit le filtre. */
+    const niveauVoulu = (): "large" | "fin" =>
+      (etat.pays !== null && cadrages.has(etat.pays)) || vue.k >= K_GRILLE_FINE ? "fin" : "large";
+
+    /* ------------------------------------------------------------- les noms
+
+       Quels foyers écrivent leur nom, décidé à chaque changement de vue.
+
+       Un placement calculé au build ne tient plus : il supposait une échelle par
+       pays, or la vue se déplace maintenant en continu et le même nom occupe une
+       fraction différente de la carte à chaque instant. Le rangement est donc
+       refait ici, en coordonnées peintes, par effectif décroissant : quand deux
+       noms se disputent la même place, le foyer le plus peuplé la garde. Les
+       autres restent nommés au survol et au focus, et le panneau les nomme tous.
+
+       Les mesures sont arithmétiques, jamais lues dans le DOM : la contre-échelle
+       tient l'étiquette à taille constante en unités de viewBox, donc sa boîte
+       ne dépend que de la longueur du texte. Aucun `getBBox`, aucun reflow. */
+
+    /**
+     * Combien d'unités de viewBox vaut un pixel écran.
+     *
+     * C'est le facteur qui rend les noms lisibles partout : le même viewBox est
+     * rendu dans 1029 px sur un bureau et 378 px sur un téléphone, donc une
+     * taille exprimée en unités y donne deux corps très différents. La page
+     * mesure, publie `--upx`, et la feuille de style en tire un corps constant.
+     */
+    function mesurerUnite() {
+      if (!svg || !cadreG) return 1.37;
+      const r = svg.getBoundingClientRect();
+      if (!r.width || !r.height) return 1.37;
+      const upx = 1 / Math.min(r.width / LARGEUR, r.height / HAUTEUR);
+      cadreG.style.setProperty("--upx", String(Math.round(upx * 1000) / 1000));
+      return upx;
+    }
+    let upx = mesurerUnite();
+
+    /** Corps du nom, en unités de viewBox — miroir exact de la règle CSS. */
+    const CORPS_PX = 11;
+    const RATIO_AVANCE = 0.64; // JetBrains Mono, mesuré au rendu.
+    const rayon = (n: number) => 4 + Math.sqrt(n) * 1.9;
+
+    function rangerNoms() {
+      if (niveau !== "fin") {
+        // Le jeu fin est masqué, mais ses marques survivraient au retour : on
+        // ne laisse pas d'état périmé derrière soi.
+        for (const n of document.querySelectorAll(".node[data-nomme]")) {
+          n.removeAttribute("data-nomme");
+        }
+        return;
+      }
+      const posees: number[][] = [];
+      const nommes = new Set<string>();
+      // Les boîtes se mesurent dans le même repère que le corps du texte, donc
+      // à partir de `--upx` : à cadre étroit, un nom occupe proportionnellement
+      // plus de carte, et il faut en poser moins.
+      const corps = upx * CORPS_PX;
+      const avance = corps * RATIO_AVANCE;
+      const interligne = corps * 1.3;
+      const marge = upx * 3;
+      const sousLeDisque = upx * 13;
+      for (const foyer of foyersVisibles()) {
+        const texte = foyer.querySelector<SVGTextElement>(".node-label");
+        if (!texte) continue;
+        if (foyer.hasAttribute("data-eteint")) { foyer.removeAttribute("data-nomme"); continue; }
+
+        const n = Number(foyer.dataset.count ?? 1);
+        const cx = Number(foyer.style.getPropertyValue("--cx")) * vue.k + vue.tx;
+        const cy = Number(foyer.style.getPropertyValue("--cy")) * vue.k + vue.ty;
+        // Hors du cadre : rien à ranger, et surtout rien à réserver — un nom
+        // invisible qui bloquerait la place d'un nom visible serait absurde.
+        if (cx < -40 || cx > LARGEUR + 40 || cy < -40 || cy > HAUTEUR + 40) {
+          foyer.removeAttribute("data-nomme");
+          continue;
+        }
+        // Un centième de degré fait un millier de mètres : une même commune
+        // occupe plusieurs cellules. Son nom ne s'écrit qu'une fois.
+        const lieu = texte.textContent ?? "";
+        if (nommes.has(lieu)) { foyer.removeAttribute("data-nomme"); continue; }
+
+        const dx = (lieu.length * avance) / 2 + marge;
+        const dy = interligne / 2 + marge;
+        const y = cy + rayon(n) + sousLeDisque;
+        const b = [cx - dx, cx + dx, y - dy, y + dy];
+        if (posees.some((q) => b[0] < q[1] && q[0] < b[1] && b[2] < q[3] && q[2] < b[3])) {
+          foyer.removeAttribute("data-nomme");
+          continue;
+        }
+        posees.push(b);
+        nommes.add(lieu);
+        foyer.setAttribute("data-nomme", "");
+      }
+    }
 
     /* ------------------------------------------------------------------ URL */
 
@@ -404,26 +717,38 @@ const CONTRACT = `<!--
      * ferait mentir l'écran.
      */
     function refletPanneau() {
-      const section = ouvert === null ? null : panneaux.get(ouvert);
-      if (!section) return;
       const actif = etat.famille !== null || etat.pays !== null;
-      for (const li of section.querySelectorAll<HTMLElement>("[data-acteur]")) {
-        const hors = actif && !passe(li.dataset.f ?? "", li.dataset.c ?? "");
-        li.toggleAttribute("data-hors-filtre", hors);
-        li.querySelector("[data-mention]")?.toggleAttribute("hidden", !hors);
+      // Toutes les sections visibles, et non la seule ouverte : en régime pays
+      // il y en a autant que le pays compte de foyers.
+      for (const section of panneaux.values()) {
+        if (section.hidden) continue;
+        for (const li of section.querySelectorAll<HTMLElement>("[data-acteur]")) {
+          const hors = actif && !passe(li.dataset.f ?? "", li.dataset.c ?? "");
+          li.toggleAttribute("data-hors-filtre", hors);
+          li.querySelector("[data-mention]")?.toggleAttribute("hidden", !hors);
+        }
       }
     }
 
-    function appliquer() {
-      // Le cadrage d'abord : il choisit le niveau, donc les foyers à filtrer.
-      cadrer();
-
+    /** Éteint les foyers hors filtre et rend le nombre de survivants. Extrait
+     *  d'`appliquer()` parce qu'un changement de vue peut changer le jeu de
+     *  foyers affiché sans qu'aucun filtre ait bougé. */
+    function marquerFoyers() {
       let visibles = 0;
       for (const foyer of foyersVisibles()) {
         const ok = passe(foyer.dataset.fams ?? "", foyer.dataset.country ?? "");
         foyer.toggleAttribute("data-eteint", !ok);
         if (ok) visibles++;
       }
+      return visibles;
+    }
+
+    function appliquer() {
+      // Le cadrage d'abord : il choisit le niveau, donc les foyers à filtrer.
+      cadrer();
+
+      const visibles = marquerFoyers();
+      rangerNoms();
 
       const actif = etat.famille !== null || etat.pays !== null;
       carte.toggleAttribute("data-carte-filtre", actif);
@@ -452,57 +777,89 @@ const CONTRACT = `<!--
       versAnnuaire.href = p.toString() ? `${base}?${p}` : base;
 
       refletFacettes();
-      refletPanneau();
+      rendrePanneau();
       ecrireUrl();
     }
 
     /**
-     * Recadrage sur le pays filtré.
+     * Saut sur le pays filtré.
      *
-     * Le zoom suit le filtre au lieu d'être un contrôle de plus : cliquer
-     * « Maurice » désigne déjà une région, recadrer dessus est la conséquence
-     * de ce clic. Sans filtre pays, le bassin entier.
+     * Le cadrage suit le filtre au lieu d'être un contrôle de plus : cliquer
+     * « Maurice » désigne déjà une région, s'y rendre est la conséquence de ce
+     * clic. Ce n'est plus le seul moyen d'y arriver — la vue se manipule
+     * directement — mais ça reste le plus court, et il pose la fenêtre juste.
      *
-     * Il ne sépare pas les acteurs co-localisés — ils partagent des centroïdes
+     * Il ne sépare pas les acteurs co-localisés : ils partagent des centroïdes
      * de ville, aucun zoom n'y changera rien. C'est le panneau qui répond à
-     * « qui est là » ; le recadrage ne fait que rendre la région lisible.
+     * « qui est là » ; le cadrage ne fait que rendre la région lisible.
      */
     function cadrer() {
-      const g = document.querySelector<SVGGElement>(".cadre");
-      if (!g) return;
-      const b = etat.pays === null ? null : boutons.find(
-        (x) => x.dataset.facet === "pays" && (x.dataset.value ?? "") === etat.pays
-      );
       // Un pays sans foyer géolocalisé n'a pas de cadrage : on reste au bassin
-      // entier plutôt que de zoomer sur du vide.
-      const c = b?.dataset.cadrage ? JSON.parse(b.dataset.cadrage) : null;
-      const { k, tx, ty } = c ?? { k: 1, tx: 0, ty: 0 };
-      g.style.setProperty("--k", String(k));
-      g.style.setProperty("--tx", String(tx));
-      g.style.setProperty("--ty", String(ty));
-
-      // Le niveau suit le cadrage : la grille fine n'a de sens que là où il y a
-      // la place de séparer les foyers.
-      const voulu = c ? "fin" : "large";
-      if (voulu === niveau) return;
-      // Le panneau ouvert appartient au niveau qu'on quitte : sa clé n'existe
-      // plus dans le jeu affiché, on referme plutôt que de laisser un panneau
-      // sans foyer correspondant.
-      fermer();
-      niveau = voulu;
-      for (const [nom, groupe] of groupes) groupe.toggleAttribute("hidden", nom !== niveau);
+      // entier plutôt que de sauter sur du vide.
+      const c = etat.pays === null ? null : cadrages.get(etat.pays);
+      Object.assign(vue, c ?? VUE_PLEINE);
+      poserVue(true);
     }
 
     /* -------------------------------------------------------------- panneau */
 
+    /**
+     * Rend le panneau depuis l'état, plutôt que de le muter à chaque geste.
+     *
+     * Deux régimes, et c'est le cadrage qui tranche :
+     *
+     * — **Bassin.** Aucun pays filtré : le panneau attend, puis montre le seul
+     *   foyer cliqué. Sur 148° de longitude, tout afficher n'a pas de sens.
+     * — **Pays.** Un pays est cadré : le panneau devient la liste de ce pays,
+     *   tous ses foyers à la suite, du plus peuplé au plus petit. C'est la
+     *   réponse directe à « qui est présent ici », sans exiger de trouver puis
+     *   viser chaque disque — et c'est indispensable là où la géographie ne
+     *   répond pas : les 41 fiches des Maldives tiennent sur un point.
+     *
+     * En régime pays, cliquer un foyer ne réduit plus le panneau à ce foyer :
+     * il l'y fait défiler. Le contexte du pays est ce qu'on est venu chercher,
+     * le perdre à chaque clic serait le défaire.
+     */
+    const modePays = () => niveau === "fin" && etat.pays !== null && entetes.has(etat.pays);
+
+    function rendrePanneau() {
+      // Garde-fou : un foyer retenu appartient toujours au jeu affiché. Sans ça,
+      // un changement de niveau qui échapperait à `poserVue` laisserait le
+      // panneau sur un foyer que la carte ne montre plus.
+      if (ouvert !== null && !ouvert.startsWith(`${niveau}-`)) {
+        document.querySelector(".node[data-actif]")?.removeAttribute("data-actif");
+        ouvert = null;
+      }
+      for (const s of panneaux.values()) {
+        s.hidden = true;
+        s.toggleAttribute("data-vise", s.dataset.panneau === ouvert);
+      }
+      for (const h of entetes.values()) h.hidden = true;
+
+      const pays = modePays();
+      if (pays) {
+        for (const [cle, s] of panneaux) {
+          if (cle.startsWith("fin-") && (s.dataset.pays ?? "") === etat.pays) s.hidden = false;
+        }
+        entetes.get(etat.pays!)!.hidden = false;
+      } else if (ouvert !== null) {
+        panneaux.get(ouvert)!.hidden = false;
+      }
+
+      invite?.toggleAttribute("hidden", pays || ouvert !== null);
+      // `data-ouvert` ne pilote que la feuille tactile, et elle ne monte que sur
+      // un geste explicite : sous `lg`, s'ouvrir au seul choix d'un pays
+      // recouvrirait la carte que ce choix vient de cadrer.
+      hote.toggleAttribute("data-ouvert", ouvert !== null);
+      refletPanneau();
+    }
+
     function fermer(rendreFocus = false) {
       if (ouvert === null) return;
       const precedent = document.querySelector<SVGGElement>(`.node[data-idx="${ouvert}"]`);
-      panneaux.get(ouvert)!.hidden = true;
       precedent?.removeAttribute("data-actif");
       ouvert = null;
-      invite?.removeAttribute("hidden");
-      hote.removeAttribute("data-ouvert");
+      rendrePanneau();
       if (rendreFocus) precedent?.focus();
     }
 
@@ -510,21 +867,25 @@ const CONTRACT = `<!--
       const cle = foyer.dataset.idx ?? "";
       const section = panneaux.get(cle);
       if (!section) return;
-      if (ouvert !== null) panneaux.get(ouvert)!.hidden = true;
 
       for (const actif of document.querySelectorAll(".node[data-actif]")) {
         actif.removeAttribute("data-actif");
       }
       foyer.setAttribute("data-actif", "");
-      invite?.setAttribute("hidden", "");
-      section.hidden = false;
-      hote.setAttribute("data-ouvert", "");
       ouvert = cle;
+      rendrePanneau();
 
-      refletPanneau();
+      // En régime pays, la section est une parmi plusieurs : on l'amène sous les
+      // yeux au lieu de masquer les autres.
+      if (modePays() && corps) {
+        corps.scrollTo({
+          top: section.offsetTop - corps.offsetTop,
+          behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        });
+      }
       // Le focus part sur le titre : le lecteur d'écran enchaîne lieu, effectif
       // puis liste, au lieu de reprendre au début du document.
-      section.querySelector<HTMLElement>("h2")?.focus();
+      section.querySelector<HTMLElement>("h3")?.focus();
     }
 
     /* -------------------------------------------------------------- écoutes */
@@ -550,8 +911,10 @@ const CONTRACT = `<!--
 
     // Délégation sur la carte entière plutôt que sur un groupe de foyers : il y
     // en a deux, et celui qui écoute doit rester le même quand on bascule.
-    const svg = carte.querySelector("svg");
     svg?.addEventListener("click", (e) => {
+      // Un glisser se termine par un `click` : sans ce garde-fou, déplacer la
+      // carte en partant d'un disque ouvrirait son panneau à l'arrivée.
+      if (glisse) return;
       const foyer = (e.target as Element).closest<SVGGElement>(".node[role='button']");
       if (foyer) ouvrir(foyer);
     });
@@ -565,14 +928,225 @@ const CONTRACT = `<!--
       ouvrir(foyer);
     });
 
+    /* -------------------------------------------------------- navigation
+
+       Molette, glisser, pincement, clavier et boutons écrivent tous la même
+       `vue`. Rien ici ne touche au DOM de la carte : chaque geste ne fait que
+       recalculer trois nombres, et `poserVue` s'occupe du reste. */
+
+    /** Coordonnées d'un événement dans le repère du viewBox racine. */
+    function versCarte(e: { clientX: number; clientY: number }) {
+      const r = svg!.getBoundingClientRect();
+      // Le `meet` du viewBox centre la fenêtre dans la boîte : sur un cadre plus
+      // haut que 1,9:1, il reste des bandes qu'il faut retrancher, sinon le zoom
+      // à la souris dérive d'autant.
+      const s = Math.min(r.width / LARGEUR, r.height / HAUTEUR);
+      return {
+        x: (e.clientX - r.left - (r.width - LARGEUR * s) / 2) / s,
+        y: (e.clientY - r.top - (r.height - HAUTEUR * s) / 2) / s,
+      };
+    }
+
+    /** Zoom d'un facteur autour d'un point fixe : ce qui est sous le curseur y
+     *  reste. Zoomer au centre du cadre oblige à recentrer après chaque cran. */
+    function zoomer(facteur: number, ancre?: { x: number; y: number }, anime = false) {
+      const a = ancre ?? { x: LARGEUR / 2, y: HAUTEUR / 2 };
+      const avant = vue.k;
+      vue.k = Math.min(K_MAX, Math.max(K_MIN, vue.k * facteur));
+      const reel = vue.k / avant;
+      vue.tx = a.x - (a.x - vue.tx) * reel;
+      vue.ty = a.y - (a.y - vue.ty) * reel;
+      poserVue(anime);
+    }
+
+    let glisse = false;
+    const pointeurs = new Map<number, { x: number; y: number }>();
+    let ecart = 0;
+
+    svg?.addEventListener("pointerdown", (e) => {
+      const ev = e as PointerEvent;
+      pointeurs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      if (pointeurs.size === 2) {
+        const [a, b] = [...pointeurs.values()];
+        ecart = Math.hypot(a.x - b.x, a.y - b.y);
+      }
+      glisse = false;
+    });
+
+    svg?.addEventListener("pointermove", (e) => {
+      const ev = e as PointerEvent;
+      const precedent = pointeurs.get(ev.pointerId);
+      if (!precedent) return;
+      const dx = ev.clientX - precedent.x;
+      const dy = ev.clientY - precedent.y;
+      pointeurs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+
+      if (pointeurs.size >= 2) {
+        // Pincement : l'écart entre les deux doigts donne le facteur, leur
+        // milieu donne l'ancre.
+        const [a, b] = [...pointeurs.values()];
+        const neuf = Math.hypot(a.x - b.x, a.y - b.y);
+        if (ecart > 0 && neuf > 0) {
+          zoomer(neuf / ecart, versCarte({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 }));
+        }
+        ecart = neuf;
+        glisse = true;
+        ev.preventDefault();
+        return;
+      }
+
+      if (ev.buttons === 0 && ev.pointerType === "mouse") return;
+      // Quatre pixels de tolérance : un clic n'est jamais parfaitement immobile,
+      // et sans seuil le moindre frémissement annulerait l'ouverture du foyer.
+      if (!glisse && Math.hypot(dx, dy) < 4) return;
+      if (!glisse) {
+        glisse = true;
+        svg!.setPointerCapture(ev.pointerId);
+      }
+      const r = svg!.getBoundingClientRect();
+      const s = Math.min(r.width / LARGEUR, r.height / HAUTEUR);
+      vue.tx += dx / s;
+      vue.ty += dy / s;
+      poserVue();
+    });
+
+    for (const fin of ["pointerup", "pointercancel"] as const) {
+      svg?.addEventListener(fin, (e) => {
+        const ev = e as PointerEvent;
+        pointeurs.delete(ev.pointerId);
+        if (pointeurs.size < 2) ecart = 0;
+        // Le drapeau survit jusqu'au `click` qui suit immédiatement, puis tombe.
+        if (glisse) setTimeout(() => { glisse = false; }, 0);
+      });
+    }
+
+    /**
+     * Molette : zoom sous modificateur seulement.
+     *
+     * La carte occupe la plus grande partie de l'écran. Si elle capturait la
+     * molette nue, la page deviendrait impossible à parcourir dès que le curseur
+     * la survole — on la traverserait en zoomant. Le pincement d'un pavé tactile
+     * arrive précisément comme une molette à `ctrlKey`, donc il zoome tout seul,
+     * et la souris garde les boutons et le glisser.
+     *
+     * Un geste nu ne se contente pas d'être ignoré : il dit ce qu'il aurait
+     * fallu faire. Sans ça, l'absence de réaction se lit comme une panne.
+     */
+    let minuteurIndice = 0;
+    svg?.addEventListener(
+      "wheel",
+      (e) => {
+        const ev = e as WheelEvent;
+        if (!ev.ctrlKey && !ev.metaKey) {
+          const indice = document.querySelector<HTMLElement>("[data-indice]");
+          if (indice) {
+            indice.hidden = false;
+            clearTimeout(minuteurIndice);
+            minuteurIndice = window.setTimeout(() => { indice.hidden = true; }, 1400);
+          }
+          return; // La page défile.
+        }
+        ev.preventDefault();
+        // `deltaMode` vaut 1 (lignes) sur Firefox et 0 (pixels) ailleurs : sans
+        // normalisation, un cran de molette y zoome quarante fois plus fort.
+        const pas = ev.deltaMode === 1 ? ev.deltaY * 16 : ev.deltaY;
+        zoomer(Math.exp(-Math.max(-100, Math.min(100, pas)) / 320), versCarte(ev));
+      },
+      { passive: false }
+    );
+
+    for (const b of document.querySelectorAll<HTMLElement>("[data-zoom]")) {
+      b.addEventListener("click", () => zoomer(Number(b.dataset.zoom), undefined, true));
+    }
+    for (const b of document.querySelectorAll("[data-vue-pleine]")) {
+      b.addEventListener("click", () => {
+        Object.assign(vue, VUE_PLEINE);
+        poserVue(true);
+      });
+    }
+
+    // Le clavier pilote la carte au même titre que la souris. Les flèches ne
+    // servent à rien sur un foyer — qui est un bouton — donc les intercepter ici
+    // ne prive de rien.
+    carte.addEventListener("keydown", (e) => {
+      const ev = e as KeyboardEvent;
+      const pas = 60 / vue.k;
+      const deplacements: Record<string, [number, number]> = {
+        ArrowUp: [0, pas],
+        ArrowDown: [0, -pas],
+        ArrowLeft: [pas, 0],
+        ArrowRight: [-pas, 0],
+      };
+      const d = deplacements[ev.key];
+      if (d) {
+        vue.tx += d[0] * vue.k;
+        vue.ty += d[1] * vue.k;
+        poserVue(true);
+      } else if (ev.key === "+" || ev.key === "=") {
+        zoomer(1.6, undefined, true);
+      } else if (ev.key === "-") {
+        zoomer(0.625, undefined, true);
+      } else if (ev.key === "0") {
+        Object.assign(vue, VUE_PLEINE);
+        poserVue(true);
+      } else {
+        return;
+      }
+      ev.preventDefault();
+    });
+
     document.addEventListener("keydown", (e) => {
       if ((e as KeyboardEvent).key === "Escape") fermer(true);
     });
+
+    // Le bouton de la feuille tactile. `Échap` reste le geste clavier ; sur un
+    // téléphone il n'existe pas, et une feuille sans sortie est un cul-de-sac.
+    for (const b of document.querySelectorAll("[data-fermer]")) {
+      b.addEventListener("click", () => fermer(true));
+    }
 
     window.addEventListener("popstate", () => {
       lireUrl();
       appliquer();
     });
+
+    /**
+     * Publie la hauteur de la barre de filtres, que le CSS ne peut pas
+     * connaître : elle varie avec le nombre de rangées de facettes qui se
+     * replient, donc avec la largeur de la fenêtre. Le plafond de la bande s'en
+     * sert pour tenir sous elle. C'est le procédé déjà tenu par le repère
+     * alphabétique de l'annuaire.
+     */
+    const barre = document.querySelector<HTMLElement>("[data-console]");
+    function publierHauteurBarre() {
+      if (!barre) return;
+      document.documentElement.style.setProperty(
+        "--console-h",
+        `${Math.round(barre.getBoundingClientRect().height)}px`
+      );
+    }
+    publierHauteurBarre();
+    if (barre && "ResizeObserver" in window) {
+      let t = 0;
+      new ResizeObserver(() => {
+        cancelAnimationFrame(t);
+        t = requestAnimationFrame(publierHauteurBarre);
+      }).observe(barre);
+    }
+
+    // Le cadre se redimensionne avec la fenêtre, et le corps des noms en dépend :
+    // sans cette reprise, passer d'un écran large à une fenêtre étroite laisse
+    // des noms de 3 px et un rangement calculé pour l'ancienne largeur.
+    if (svg && "ResizeObserver" in window) {
+      let attente = 0;
+      new ResizeObserver(() => {
+        cancelAnimationFrame(attente);
+        attente = requestAnimationFrame(() => {
+          upx = mesurerUnite();
+          rangerNoms();
+        });
+      }).observe(svg);
+    }
 
     lireUrl();
     appliquer();
@@ -580,15 +1154,198 @@ const CONTRACT = `<!--
 </script>
 
 <style>
-  /* La carte occupe son cadre : c'est l'instrument de la page, pas une
-     vignette. Le rapport est celui du viewBox, la hauteur suit. */
-  .carte-travail {
-    width: 100%;
-    height: auto;
-    aspect-ratio: 1410 / 740;
+  /* ------------------------------------------------------------ la bande
+
+     La zone de travail sort du conteneur de lecture. Le cadre fait 1,9:1 :
+     chaque pixel gagné en largeur en rend un demi en hauteur, et sur un écran
+     large les gouttières de `max-w-7xl` coûtaient deux cents pixels de bassin
+     pour rien — il n'y a pas de texte à border ici, seulement un instrument. */
+  .travail {
+    padding-inline: clamp(0rem, 1.5vw, 1.5rem);
   }
 
-  /* Les facettes de l'annuaire sont une colonne ; ici elles forment une barre.
+  .travail-grille {
+    display: grid;
+    gap: 1rem;
+  }
+
+  /* Le cadre porte le rapport, donc la hauteur de la rangée ; le panneau s'y
+     étire par `stretch`. C'est l'inverse du réglage précédent, où la hauteur du
+     panneau était devinée (`max-h-[70dvh]`) et la colonne de droite finissait
+     aux deux tiers vide. Le plafond garde la carte dans l'écran sur un moniteur
+     large : au-delà, le `meet` du viewBox centre sans jamais rogner. */
+  .carte-cadre {
+    position: relative;
+    /* `width` explicite et `align-self: start` : sans eux la grille étire le
+       cadre à la hauteur de la rangée, et `aspect-ratio` en redéduit une largeur
+       qui déborde de sa colonne. C'est la largeur qui commande, jamais l'inverse. */
+    width: 100%;
+    align-self: start;
+    aspect-ratio: 1410 / 740;
+    /* La bande tient sous la barre de filtres, barre de navigation comprise.
+       Réglé au jugé — `100dvh - 11rem` — elle dépassait de vingt pixels la place
+       disponible : il fallait donc descendre pour voir le bas de la carte, et ce
+       geste glissait le haut du panneau sous la barre collante, qui le
+       recouvrait. Un foyer d'un seul acteur y disparaissait en entier. */
+    max-height: calc(100dvh - 5rem - var(--console-h, 12rem) - 2.5rem);
+    background: var(--bg-card);
+    overflow: hidden;
+  }
+
+  .carte-travail {
+    width: 100%;
+    height: 100%;
+    /* `pan-y` : le doigt qui monte fait défiler la page, comme partout ailleurs
+       sur le site ; le doigt qui va de côté déplace la carte, et deux doigts la
+       pincent. Capturer le geste vertical rendrait la page impossible à
+       parcourir dès qu'on pose le doigt sur l'instrument. */
+    touch-action: pan-y;
+    cursor: grab;
+  }
+  .carte-travail:active {
+    cursor: grabbing;
+  }
+
+  /* ------------------------------------------------------- les commandes */
+
+  .carte-commandes {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+
+  .carte-bouton {
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--border-card);
+    background: color-mix(in srgb, var(--color-navy-dark) 82%, transparent);
+    backdrop-filter: blur(8px);
+    color: rgba(255, 255, 255, 0.7);
+    transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+  }
+  .carte-bouton:hover {
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.22);
+  }
+  .carte-bouton svg {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  /* Relevé d'échelle. Monospace et `tabular-nums` comme toute mesure du site :
+     le chiffre change en continu sous le geste, il ne doit pas se dandiner. */
+  .carte-echelle {
+    position: absolute;
+    left: 0.875rem;
+    bottom: 0.75rem;
+    display: flex;
+    gap: 0.625rem;
+    align-items: baseline;
+    color: rgba(255, 255, 255, 0.5);
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+  }
+  .carte-grille {
+    color: rgba(255, 255, 255, 0.35);
+  }
+
+  .carte-indice {
+    position: absolute;
+    left: 50%;
+    bottom: 1.25rem;
+    transform: translateX(-50%);
+    padding: 0.55rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-card);
+    background: color-mix(in srgb, var(--color-navy-dark) 88%, transparent);
+    backdrop-filter: blur(8px);
+    color: rgba(255, 255, 255, 0.7);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .carte-indice[hidden] {
+    display: none;
+  }
+
+  /* Sous `lg` la molette n'existe pas, et le cadre est trop court pour porter
+     une pastille de plus au milieu. */
+  @media (max-width: 1023px) {
+    .carte-indice {
+      display: none;
+    }
+    .carte-echelle {
+      left: 0.625rem;
+      bottom: 0.5rem;
+    }
+    .carte-commandes {
+      top: 0.5rem;
+      right: 0.5rem;
+    }
+  }
+
+  /* Le message d'ensemble vide, posé sur la carte qu'il explique. */
+  .carte-vide {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    padding: 1.5rem;
+  }
+  .carte-vide.hidden {
+    display: none;
+  }
+
+  @media (min-width: 640px) {
+    .carte-cadre {
+      border: 1px solid var(--border-card);
+      border-radius: 1rem;
+    }
+  }
+
+  /* Deux colonnes seulement à partir de `lg` : sous ce seuil le panneau est une
+     feuille flottante, il ne prend pas de place dans la grille. */
+  @media (min-width: 1024px) {
+    .travail-grille {
+      grid-template-columns: minmax(0, 1fr) 22rem;
+      align-items: stretch;
+    }
+    /* Le rail se cale sur la rangée, il ne la fabrique pas. En hauteur `auto`,
+       le panneau d'un gros foyer imposait sa liste entière comme hauteur de
+       rangée et emportait la carte avec lui. */
+    [data-panneau-hote] {
+      position: relative;
+      min-height: 0;
+    }
+
+    /* En absolu, le rail ne pèse rien dans le calcul de la rangée : la carte
+       seule la décide, et le panneau s'inscrit dans ce qu'elle laisse.
+
+       Ce n'est délibérément pas `sticky`. Un panneau collant sous la barre de
+       filtres n'aurait aucune course : il fait exactement la hauteur de son
+       rail, donc rien à parcourir. Ce qui évite qu'il passe sous la barre, ce
+       n'est pas de le décoller, c'est que la bande entière tienne dans la place
+       laissée sous elle — voir le plafond de `.carte-cadre`. */
+    [data-panneau-hote] > .panel {
+      position: absolute;
+      inset: 0;
+    }
+  }
+
+  @media (min-width: 1536px) {
+    .travail-grille {
+      grid-template-columns: minmax(0, 1fr) 24rem;
+    }
+  }
+
+  /* ---------------------------------------------------------- les facettes
+
+     Les facettes de l'annuaire sont une colonne ; ici elles forment une barre.
      Même composant visuel, disposition en ligne. */
   .facet--chip {
     display: inline-grid;
@@ -602,11 +1359,172 @@ const CONTRACT = `<!--
     grid-template-columns: auto auto;
   }
 
+  /* Deux boutons côte à côte au doigt, empilés à partir de `lg` où la largeur
+     qu'ils prennent est de la largeur que les facettes n'ont pas. */
+  .actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .actions > * {
+    flex: 1;
+  }
+  /* La gouttière du bouton est taillée pour un libellé posé au milieu d'une
+     section, pas pour une colonne de commande : à 1,6 rem de chaque côté,
+     « Voir dans l'annuaire » passait à la ligne. */
+  .actions .btn-outline {
+    padding-inline: 1rem;
+  }
+
+  @media (min-width: 1024px) {
+    .actions {
+      flex-direction: column;
+      width: 12.5rem;
+      gap: 0.5rem;
+    }
+    .actions > * {
+      flex: none;
+    }
+  }
+
+  /* Un axe = un libellé et sa piste. Le libellé passe en tête de ligne à partir
+     de `lg` : en pile, chaque axe coûtait une ligne de plus à une barre qui reste
+     collée en haut de l'écran pendant toute la consultation. */
+  .axe {
+    display: grid;
+    gap: 0.4rem;
+    min-width: 0;
+  }
+
+  /* La piste déborde la gouttière de la page pour finir au bord de l'écran.
+     Coupée sur l'inset de 1,5 rem, la dernière pastille est tranchée en plein
+     milieu à un endroit qui n'a aucune raison d'être un bord : ça se lit comme
+     un défaut, pas comme une rangée qui continue. */
+  .axe-piste {
+    position: relative;
+    min-width: 0;
+    margin-inline: -1.5rem;
+  }
+
+  .axe-chips {
+    display: flex;
+    gap: 0.375rem;
+    min-width: 0;
+    /* Sous `lg`, une rangée qui défile plutôt qu'une grille qui s'empile — le
+       motif de la légende du héros. Les vingt-trois facettes empilées faisaient
+       cinq cents pixels de filtres avant la première parcelle de carte. */
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-block: 2px;
+    padding-inline: 1.5rem;
+    scroll-padding-inline: 1.5rem;
+  }
+  .axe-chips::-webkit-scrollbar {
+    display: none;
+  }
+  .axe-chips > * {
+    flex: none;
+  }
+
+  /* Dégradé de bord, et non `mask-image` : la barre porte un `backdrop-filter`,
+     et sous Chromium un masque sur l'un de ses descendants perce le flou. */
+  .axe-piste::after {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    right: 0;
+    width: 3.5rem;
+    background: linear-gradient(90deg, transparent, var(--color-navy-dark) 85%);
+    pointer-events: none;
+  }
+
+  @media (min-width: 1024px) {
+    .axe-piste {
+      margin-inline: 0;
+    }
+    .axe-chips {
+      padding-inline: 0;
+    }
+    .axe {
+      grid-template-columns: 4.5rem minmax(0, 1fr);
+      gap: 0 1rem;
+      align-items: start;
+    }
+    .axe-titre {
+      padding-top: 0.6rem;
+    }
+    .axe-chips {
+      flex-wrap: wrap;
+      overflow: visible;
+    }
+    .axe-piste::after {
+      display: none;
+    }
+  }
+
   /* Une ligne d'acteur que le filtre courant exclut reste lisible mais se
      retire : le panneau répond à une question de lieu, pas de filtre, et
      masquer ces lignes ferait mentir l'effectif affiché en tête. */
   [data-acteur][data-hors-filtre] {
     opacity: 0.4;
+  }
+
+  /* ------------------------------------------------------- le panneau
+
+     Une seule zone de défilement, du haut de la liste au bas du dernier foyer.
+     Chaque foyer y garde son en-tête collant : en descendant les 43 communes de
+     La Réunion, on lit toujours celle où l'on se trouve. */
+  .panneau-corps {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .foyer-entete {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    /* Opaque : un nom d'acteur qui transparaît sous l'en-tête se lit comme un
+       défaut de rendu, pas comme de la profondeur. C'est la règle déjà tenue par
+       le repère alphabétique de l'annuaire. */
+    background: var(--color-navy-dark);
+  }
+
+  /* Le foyer que l'on vient de viser sur la carte. Repère de position dans une
+     liste qui peut faire quarante blocs — pas une sélection : les autres restent
+     lisibles et le pays reste entier. */
+  .foyer-bloc[data-vise] .foyer-entete {
+    box-shadow: inset 2px 0 0 var(--color-gold);
+  }
+
+  /* Barre de la feuille tactile : poignée centrée et sortie explicite. Elle ne
+     s'affiche que quand la feuille est ouverte — au repos elle est hors écran,
+     et sur le rail de bureau elle n'a pas lieu d'être. */
+  .feuille-barre {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.5rem 0.75rem 0.5rem 1.25rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .feuille-poignee {
+    width: 2.25rem;
+    height: 0.25rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.18);
+    margin-inline: auto;
+  }
+  .feuille-fermer {
+    color: rgba(255, 255, 255, 0.6);
+    padding: 0.6rem 0.75rem;
+    margin: -0.35rem -0.25rem -0.35rem 0;
+    border-radius: 0.5rem;
+    transition: color 0.2s ease, background-color 0.2s ease;
+  }
+  .feuille-fermer:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.06);
   }
 
   /* Sous `lg`, le panneau quitte la colonne et devient une feuille ancrée en
@@ -620,13 +1538,31 @@ const CONTRACT = `<!--
       z-index: 45;
       transform: translateY(101%);
       transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-      padding: 0 0.75rem 0.75rem;
+      padding: 0 0.75rem max(0.75rem, env(safe-area-inset-bottom));
     }
     [data-panneau-hote][data-ouvert] {
       transform: translateY(0);
     }
+    /* Le traitement du menu mobile, à l'identique : `navy-dark/95` sous un flou
+       d'arrière-plan. La surface de panneau du système est du blanc 3 %, et une
+       feuille posée dessus laissait lire les facettes au travers des noms
+       d'acteurs. Le flou est le seul dispositif du système qui dise « ceci
+       flotte au-dessus du contenu » — il n'y a pas d'ombre portée ici. */
     [data-panneau-hote] > .panel {
-      max-height: 48dvh;
+      max-height: 60dvh;
+      background: color-mix(in srgb, var(--color-navy-dark) 95%, transparent);
+      backdrop-filter: blur(16px);
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+    /* La poignée n'apparaît qu'avec la feuille : hors état ouvert, il n'y a rien
+       à saisir et le rail invité n'est pas une feuille. */
+    [data-panneau-hote][data-ouvert] .feuille-barre {
+      display: flex;
+    }
+    /* En feuille, l'invite ne s'affiche jamais — la feuille est hors écran tant
+       qu'aucun foyer n'est ouvert. Elle ne doit donc pas en fixer la hauteur. */
+    #panneau-invite {
+      display: none;
     }
   }
 

@@ -329,6 +329,17 @@ function agreger(taille) {
   return cells;
 }
 
+/** Ville la plus représentée d'une cellule. Les fiches sans ville ne votent
+ *  pas ; une cellule qui n'en a aucune retombe sur son pays. */
+function villeDominante(actors) {
+  const villes = new Map();
+  for (const a of actors) {
+    if (!a.city) continue;
+    villes.set(a.city, (villes.get(a.city) ?? 0) + 1);
+  }
+  return [...villes].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+}
+
 const enPoints = (cells) => [...cells.values()]
   .map((cell) => {
     const lat = cell.lat / cell.count;
@@ -354,6 +365,11 @@ const enPoints = (cells) => [...cells.values()]
       f: dominant ? dominant.slug : "sans-famille",
       fams: [...new Set(cell.actors.flatMap((a) => a.fams.split(" ")))].join(" "),
       country: cell.country,
+      // Nom du foyer. La source ne nomme pas les groupes : on prend la ville la
+      // plus représentée dans la cellule, faute de quoi le pays. Calculé ici et
+      // non dans la page, parce que la carte l'écrit aussi — en étiquette sous
+      // le disque au cadrage pays — et que deux définitions divergeraient.
+      lieu: villeDominante(cell.actors) || cell.country || "Lieu non nommé",
       actors: cell.actors,
     };
   })
@@ -374,6 +390,48 @@ export const mapPoints = enPoints(agreger(CELL));
  *  Trois fois plus de foyers pour les mêmes acteurs — c'est la répartition
  *  réelle, que le demi-degré confondait. */
 export const mapPointsFins = enPoints(agreger(CELL_FINE));
+
+/**
+ * Lecture par pays de la vue fine : ce que le cadrage sur un pays peut
+ * réellement montrer.
+ *
+ * `concentration` est le champ qui compte, et il est volontairement chiffré
+ * plutôt que binaire. Compter les foyers ne suffit pas : les Maldives en ont
+ * trois, ce qui les ferait passer pour séparables, alors que 33 de leurs 41
+ * fiches tiennent sur le seul point de Malé. Ce qu'il faut mesurer, c'est la
+ * part du pays que son plus gros foyer absorbe.
+ *
+ * Au-delà du seuil, le cadrage ne peut structurellement rien montrer de plus —
+ * la source géolocalise au centroïde de la ville, pas à l'adresse — et l'écran
+ * doit le nommer au lieu de laisser prendre un centroïde pour une position. En
+ * dessous, comme à La Réunion où le plus gros foyer ne pèse que 6 fiches sur
+ * 45, le zoom montre une répartition réelle et il n'y a rien à signaler.
+ */
+const SEUIL_CONCENTRATION = 0.5;
+
+export const paysFoyers = (() => {
+  const parPays = new Map();
+  for (const p of mapPointsFins) {
+    const cle = p.country || "";
+    let e = parPays.get(cle);
+    if (!e) parPays.set(cle, (e = { foyers: 0, acteurs: 0, plusGros: 0, lieuPlusGros: "" }));
+    e.foyers += 1;
+    e.acteurs += p.n;
+    if (p.n > e.plusGros) { e.plusGros = p.n; e.lieuPlusGros = p.lieu; }
+  }
+  for (const e of parPays.values()) {
+    e.concentration = e.plusGros / e.acteurs;
+    e.concentre = e.concentration >= SEUIL_CONCENTRATION && e.plusGros > 1;
+  }
+  return parPays;
+})();
+
+/** Rayon d'un foyer, en unités de viewBox.
+ *
+ *  Racine de l'effectif : c'est l'aire du disque qui doit porter le nombre, pas
+ *  son diamètre, sinon un foyer de 63 acteurs écrase la carte. Exporté parce
+ *  que la mise en page des étiquettes en dépend autant que le tracé. */
+export const rayonFoyer = (n) => Math.round((4 + Math.sqrt(n) * 1.9) * 10) / 10;
 
 /**
  * Arcs du fond de carte.

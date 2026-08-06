@@ -13,7 +13,7 @@
  */
 import mapData from "../data/map-oi.json";
 import { geometryToPath, VIEW_WIDTH, VIEW_HEIGHT, project } from "../lib/projection.js";
-import { mapPoints, mapPointsFins, mapArcs, coverage } from "../lib/data.js";
+import { mapPoints, mapPointsFins, mapArcs, coverage, rayonFoyer } from "../lib/data.js";
 
 interface Props {
   /** `meet` montre la fenêtre entière, `slice` la remplit en rognant. */
@@ -93,13 +93,13 @@ const arcs = mapArcs.map((a, i) => ({
 /** Les cinq plus gros foyers reçoivent un anneau qui respire. Au-delà, la carte
     se met à clignoter de partout et plus rien ne ressort. */
 const HALO_COUNT = 5;
-const haloIds = new Set(
-  [...mapPoints].sort((a, b) => b.n - a.n).slice(0, HALO_COUNT).map((p) => `${p.x}:${p.y}`)
-);
+/** Les foyers eux-mêmes, et non leurs coordonnées : `x` et `y` sont arrondis au
+    dixième d'unité et plusieurs cellules distinctes y retombent au même point. */
+const halos = new Set([...mapPoints].sort((a, b) => b.n - a.n).slice(0, HALO_COUNT));
 
-/** Rayon en racine de l'effectif : c'est l'aire du disque qui doit porter le
-    nombre, pas son diamètre, sinon un foyer de 63 acteurs écrase la carte. */
-const radius = (n) => Math.round((4 + Math.sqrt(n) * 1.9) * 10) / 10;
+/** Rayon en racine de l'effectif. Partagé avec la mise en page des étiquettes,
+    qui se calcule à partir du bord du disque. */
+const radius = rayonFoyer;
 
 /** La landing n'a qu'un jeu de foyers : elle ne cadre sur rien, la grille fine
     y serait un pâté. La carte de travail porte les deux. */
@@ -248,6 +248,11 @@ const label =
           data-family={p.f}
           data-count={p.n}
           data-country={p.country}
+          {/* Origine de la contre-échelle, en coordonnées de viewBox et non en
+              `fill-box`. L'étiquette entre dans la boîte du groupe : avec une
+              origine calculée sur cette boîte, le disque se déplacerait dès
+              qu'on lui ajoute un nom sous les pieds. */}
+          style={`--cx:${p.x};--cy:${p.y}`}
           {...(interactif && {
             role: "button",
             tabindex: "0",
@@ -264,7 +269,17 @@ const label =
             "aria-label": `${p.n} acteur${p.n > 1 ? "s" : ""}${p.country ? ` — ${p.country}` : ""}`,
           })}
         >
-          {nom === "large" && haloIds.has(`${p.x}:${p.y}`) && (
+          {/* Cible de pointage. Le disque d'un foyer d'un seul acteur fait
+              4 px de rayon à l'écran — sous le seuil de ce qu'une souris atteint
+              sans s'y reprendre, et très loin des 24 px d'un objectif tactile.
+              Ce cercle transparent lui donne une prise, sans rien changer au
+              dessin. Comme tout le groupe, il porte la contre-échelle : sa
+              taille est donc constante à l'écran quel que soit le cadrage. */}
+          {interactif && (
+            <circle class="node-cible" cx={p.x} cy={p.y} style={`--r:${radius(p.n)}`} />
+          )}
+
+          {nom === "large" && halos.has(p) && (
             <circle class="node-halo" cx={p.x} cy={p.y} r={radius(p.n) * 2.4} fill={p.c} />
           )}
           <circle
@@ -277,6 +292,28 @@ const label =
             stroke-width="1.8"
           />
           <circle cx={p.x} cy={p.y} r={Math.max(2, radius(p.n) * 0.32)} fill={p.c} />
+          {/* Le nom du lieu, sur la vue fine seulement. Il est écrit pour tous
+              les foyers, mais n'est peint que sur ceux que la page retient :
+              elle range les noms à chaque changement de cadrage, en fonction de
+              la place réellement disponible. Ce tri ne peut plus se faire au
+              build depuis que la vue se déplace librement — il n'y a plus une
+              échelle par pays, il y en a une par instant.
+
+              `aria-hidden` : le nom est déjà dans l'`aria-label` du groupe et
+              dans le panneau. Un lecteur d'écran ne doit pas l'entendre deux
+              fois de suite. */}
+          {nom === "fin" && (
+            <text
+              class="node-label"
+              x={p.x}
+              y={p.y + radius(p.n)}
+              text-anchor="middle"
+              aria-hidden="true"
+            >
+              {p.lieu}
+            </text>
+          )}
+
           {/* L'infobulle native reste au mode non interactif. En interactif,
               `aria-label` porte déjà la même phrase et le `<title>` la ferait
               annoncer deux fois. */}
@@ -299,12 +336,19 @@ const label =
 
   /* Cadrage. `--k`, `--tx`, `--ty` sont posés par la page ; à défaut, le bassin
      entier. La transition porte sur le transform, composité, jamais sur le
-     viewBox qui ne s'anime pas. */
+     viewBox qui ne s'anime pas.
+
+     Elle n'est active que sur `[data-anime]`, c'est-à-dire sur un saut décidé —
+     le choix d'un pays, un retour au bassin. Un geste de navigation écrit ces
+     variables à chaque frame : animer chacune de ces écritures ferait courir la
+     carte 600 ms derrière la main. */
   .cadre {
     --k: 1;
     --tx: 0;
     --ty: 0;
     transform: translate(calc(var(--tx) * 1px), calc(var(--ty) * 1px)) scale(var(--k));
+  }
+  .cadre[data-anime] {
     transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
@@ -316,16 +360,27 @@ const label =
      rayons. */
   .cadre .node {
     transform: scale(calc(1 / var(--k)));
-    transform-box: fill-box;
-    transform-origin: center;
+    /* Origine exacte, au centre du disque, exprimée dans le repère du viewBox.
+       `fill-box` prenait le centre de la boîte du groupe : l'étiquette posée
+       sous le disque décalait cette boîte vers le bas, et le disque montait
+       d'autant à chaque cadrage. L'origine doit être le point géographique,
+       pas le barycentre du dessin. */
+    transform-box: view-box;
+    transform-origin: calc(var(--cx) * 1px) calc(var(--cy) * 1px);
+    transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  /* La contre-échelle suit le même régime que le cadrage : animée sur un saut,
+     immédiate sous la main. Désaccordées, les foyers glisseraient sur les
+     terres pendant toute la durée du geste. */
+  .cadre[data-anime] .node {
     transition:
       opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1),
       transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .cadre,
-    .cadre .node {
+    .cadre[data-anime],
+    .cadre[data-anime] .node {
       transition: none;
     }
   }
@@ -390,6 +445,64 @@ const label =
   :global([data-isolate]) .arcs {
     opacity: 0.25;
     transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Étiquette de foyer. Elle vit dans le groupe du foyer, donc la contre-échelle
+     la tient à taille constante et à distance constante du disque quel que soit
+     le cadrage. `paint-order` dessine le halo de fond avant les lettres : sans
+     lui, un nom qui tombe sur une côte claire devient illisible. */
+  /* Taille constante à l'écran, et non dans le repère de la carte.
+     `font-size` s'exprime en unités de viewBox : à 10 unités, le nom fait 7 px
+     sur un cadre de bureau et 3 px sur un téléphone, où le même viewBox est
+     rendu dans 378 px de large. `--upx` — le nombre d'unités que vaut un pixel,
+     mesuré et publié par la page — ramène les deux au même corps lisible. Le
+     décalage sous le disque suit la même règle : mis en dur, il collait le nom
+     au cercle dès que le cadre rétrécissait. */
+  .node-label {
+    font-family: var(--font-mono);
+    font-size: calc(var(--upx, 1.37) * 11px);
+    transform: translateY(calc(var(--upx, 1.37) * 13px));
+    letter-spacing: 0.04em;
+    fill: rgba(255, 255, 255, 0.82);
+    stroke: #0f1a30;
+    stroke-width: calc(var(--upx, 1.37) * 3px);
+    paint-order: stroke fill;
+    opacity: 0;
+    /* Cliquable, contrairement à sa première version. Un nom écrit à côté d'un
+       disque de 4 px est la plus grande surface visible du foyer : c'est
+       naturellement là qu'on vise, et le clic tombait dans la mer. Seuls les
+       noms peints le sont — un nom invisible ne doit rien intercepter. */
+    pointer-events: none;
+    transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  /* Les noms retenus par le placement, et seulement dans le pays cadré. Le
+     cadrage d'un grand pays en laisse voir d'autres — la fenêtre de Madagascar
+     contient La Réunion — et leurs étiquettes, calculées pour l'échelle de
+     *leur* cadrage, se chevauchent dès qu'on les lit à une autre. `data-nomme`
+     est posé par la page, qui seule sait quel pays est cadré. */
+  /* Rayon en pixels écran, pas en unités de carte : `--upx` tient la cible à
+     13 px de rayon — soit 26 px de diamètre, au-dessus du plancher tactile —
+     que le viewBox soit rendu dans 1029 px ou dans 378. Un gros foyer garde le
+     sien s'il est déjà plus large. */
+  .node-cible {
+    r: max(calc(var(--r, 6) * 1px), calc(var(--upx, 1.37) * 13px));
+    fill: transparent;
+    stroke: none;
+  }
+
+  .node[data-nomme] .node-label {
+    pointer-events: auto;
+  }
+
+  .node[data-nomme] .node-label,
+  .node:hover .node-label,
+  .node:focus-visible .node-label,
+  .node[data-actif] .node-label {
+    opacity: 1;
+  }
+  /* Un foyer éteint par le filtre n'annonce pas son nom plus fort que son disque. */
+  .node[data-eteint] .node-label {
+    opacity: 0;
   }
 
   .node-halo {
