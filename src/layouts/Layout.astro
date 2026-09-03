@@ -88,6 +88,10 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     <meta property="og:url" content={canonical} />
     <meta property="og:site_name" content="Babouk" />
 
+    {/* Mesure d'audience Plausible — auto-hébergée, sans cookie, sans
+        traceur publicitaire. Détail légal : kodetis.com/mentions-legal. */}
+    <script defer data-domain="babouk.kodetis.cloud" src="https://plausible.kodetis.cloud/js/script.js"></script>
+
     <title>{title}</title>
   </head>
   <body class="font-body antialiased">
